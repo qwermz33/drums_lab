@@ -12,6 +12,7 @@
 main{max-width:760px;margin:auto;padding:18px 14px 40px}.top{padding:8px 2px 16px}h1{font-size:27px;line-height:1.15;margin:0 0 8px}.sub{color:var(--muted);font-size:14px;line-height:1.5}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;margin:12px 0}
 h2{font-size:17px;margin:0 0 12px}.instruments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.instrument-table{min-width:690px}.instrument-table button{font-size:12px;padding:8px 9px;min-height:40px;white-space:nowrap}.instrument-table td:first-child{font-weight:650;white-space:nowrap}.instrument-table td{vertical-align:middle}
 button,select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius:13px;background:var(--panel2);padding:13px 11px;min-height:48px}
 button{cursor:pointer}button:disabled{opacity:.45;cursor:default}.instrument.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
 .primary{width:100%;background:var(--accent);color:#09221d;border:0;font-weight:750;margin-top:10px}.secondary{width:100%;margin-top:8px}.danger{color:#ffc0c0}
@@ -32,23 +33,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   </header>
 
   <section class="panel">
-    <h2>1. Выбери инструмент для калибровки</h2>
-    <div class="instruments" id="instrumentButtons">
-      <button class="instrument active" data-instrument="Бас-барабан">Бас-барабан</button>
-      <button class="instrument" data-instrument="Малый барабан">Малый барабан</button>
-      <button class="instrument" data-instrument="Том">Том</button>
-      <button class="instrument" data-instrument="Тарелка">Тарелка</button>
-      <button class="instrument" data-instrument="Хай-хэт">Хай-хэт</button>
-      <button class="instrument" data-instrument="Райд">Райд</button>
-      <button class="instrument" data-instrument="Крэш">Крэш</button>
-      <button class="instrument" data-instrument="Другой">Другой</button>
-    </div>
-    <div class="status" id="profileStatus">Профили пока не записаны. Выбери инструмент и откалибруй его.</div>
-    <button class="primary" id="calibrateBtn">🎯 Калибровать выбранный инструмент</button>
-    <div class="note" style="margin-top:9px">После нажатия сыграй 6–10 отдельных ударов по выбранному инструменту. Старайся играть примерно одинаково и не задевать другие барабаны.</div>
-    <h2 style="margin-top:18px">Частоты и прослушивание инструментов</h2>
-    <div class="note" style="margin-bottom:8px">После калибровки здесь появится средняя частота спектрального пика. Кнопка «Озвучить» воспроизводит синтезированный пример звучания инструмента.</div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Инструмент</th><th>Частота пика</th><th>Звук</th></tr></thead><tbody id="profilesBody"><tr><td colspan="3" class="empty">Сначала откалибруй хотя бы один инструмент</td></tr></tbody></table></div>
+    <h2>1. Таблица барабанов и тарелок</h2>
+    <div class="note" style="margin-bottom:10px">В каждой строке своя кнопка калибровки. Нажми «Начать анализ» напротив инструмента и сыграй 8 отдельных ударов по нему. После калибровки можно прослушать синтезированный пример и увидеть примерную доминирующую частоту.</div>
+    <div class="status" id="profileStatus">Профили пока не записаны. Начни анализ в строке нужного инструмента.</div>
+    <div style="overflow-x:auto;margin-top:10px"><table class="instrument-table"><thead><tr><th>Барабан</th><th>Начать анализ барабана</th><th>Прослушать барабан</th><th>Доминирующая частота, Гц</th></tr></thead><tbody id="profilesBody"></tbody></table></div>
   </section>
 
   <section class="panel">
@@ -114,21 +102,13 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       if (Array.isArray(p.feature) && p.feature.length === 96) profiles[name] = {...p, feature: Float32Array.from(p.feature)};
     }
   } catch (_) {}
-  let selected = NAMES[1];
+  let calibratingName = null;
   let audioCtx = null, analyser = null, source = null, stream = null;
   let raf = 0, running = false, calibrating = false;
   let calibrationFrames = [], calibrationHits = 0, calibrationPeakHz = [], lastHitAt = 0, lastRms = 0;
   let notationBuilt = false;
   let noiseFloor = 0.003, sessionStart = 0, hitHistory = [];
   let lastPeakHz = 0, lastFeatures = null;
-
-  document.querySelectorAll(".instrument").forEach(btn => {
-    btn.addEventListener("click", () => {
-      selected = btn.dataset.instrument;
-      document.querySelectorAll(".instrument").forEach(b => b.classList.toggle("active", b === btn));
-      updateProfileStatus();
-    });
-  });
 
   function saveProfiles() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(Object.entries(profiles).map(([name,p]) => [name,{...p,feature:Array.from(p.feature)}])))); } catch (_) {}
@@ -137,8 +117,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   function updateProfileStatus() {
     const saved = Object.keys(profiles);
     $("profileStatus").textContent = saved.length
-      ? "Готовые профили: " + saved.map(n => `${n} (${profiles[n].count} ударов)`).join(", ") + ". Выбран: " + selected + "."
-      : "Профили пока не записаны. Выбран: " + selected + ".";
+      ? "Откалиброваны: " + saved.map(n => `${n} (${profiles[n].count} ударов)`).join(", ") + ". Для повторной калибровки нажми кнопку в нужной строке."
+      : "Профили пока не записаны. Нажми «Начать анализ» в строке нужного инструмента.";
   }
 
   function setStatus(text) { $("micStatus").textContent = text; }
@@ -162,8 +142,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       sessionStart = performance.now();
       $("listenBtn").disabled = true;
       $("stopBtn").disabled = false;
-      $("calibrateBtn").disabled = false;
-      setStatus("Микрофон включён. Сыграй отдельный удар, чтобы проверить уровень.");
+          setStatus("Микрофон включён. Сыграй отдельный удар, чтобы проверить уровень.");
       loop();
     } catch (err) {
       setStatus("Не удалось открыть микрофон: " + err.message +
@@ -180,8 +159,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     stream = null; audioCtx = null; analyser = null; source = null;
     $("listenBtn").disabled = false;
     $("stopBtn").disabled = true;
-    $("calibrateBtn").disabled = false;
-    setStatus("Микрофон выключен.");
+      setStatus("Микрофон выключен.");
   }
 
   function getSpectrum() {
@@ -232,17 +210,19 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     return dot / ((Math.sqrt(na*nb)) || 1);
   }
 
-  function beginCalibration() {
+  async function beginCalibration(name) {
+    if (!running) await startAudio();
     if (!running) {
-      setStatus("Сначала нажми «Начать анализ», затем запусти калибровку.");
+      setStatus("Не удалось включить микрофон. Разреши доступ к микрофону и попробуй ещё раз.");
       return;
     }
     calibrating = true;
+    calibratingName = name;
     calibrationFrames = [];
     calibrationPeakHz = [];
     calibrationHits = 0;
-    $("calibrateBtn").disabled = true;
-    setStatus("Калибровка: сыграй 6–10 отдельных ударов по инструменту «" + selected + "».");
+    renderProfiles();
+    setStatus("Калибровка: сыграй 8 отдельных ударов по инструменту «" + name + "». Не задевай другие барабаны.");
   }
 
   function recordHit(features, peakHz, rms) {
@@ -251,7 +231,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       calibrationFrames.push(features);
       calibrationPeakHz.push(peakHz);
       calibrationHits++;
-      setStatus(`Калибровка «${selected}»: принято ударов ${calibrationHits}/8. Продолжай играть отдельные удары.`);
+      setStatus(`Калибровка «${calibratingName}»: принято ударов ${calibrationHits}/8. Продолжай играть отдельные удары.`);
       if (calibrationHits >= 8) finishCalibration();
       return;
     }
@@ -274,13 +254,14 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     let norm = Math.sqrt(avg.reduce((s,v)=>s+v*v,0)) || 1;
     for(let i=0;i<avg.length;i++) avg[i]/=norm;
     const avgPeakHz = calibrationPeakHz.length ? calibrationPeakHz.reduce((a,b)=>a+b,0)/calibrationPeakHz.length : 0;
-    profiles[selected] = {feature:avg, count, peakHz:avgPeakHz, updated:new Date().toISOString()};
+    const finishedName = calibratingName;
+    profiles[finishedName] = {feature:avg, count, peakHz:avgPeakHz, updated:new Date().toISOString()};
     saveProfiles();
-    renderProfiles();
     calibrating = false;
-    $("calibrateBtn").disabled = false;
+    calibratingName = null;
+    renderProfiles();
     updateProfileStatus();
-    setStatus(`Готово: профиль «${selected}» создан по ${count} ударам. Можно калибровать следующий инструмент.`);
+    setStatus(`Готово: профиль «${finishedName}» создан по ${count} ударам. Можно калибровать следующий инструмент.`);
   }
 
   function addHit(hit) {
@@ -306,21 +287,30 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 
   function renderProfiles() {
     const body = $("profilesBody");
-    const names = NAMES.filter(name => profiles[name]);
-    if (!names.length) {
-      body.innerHTML = '<tr><td colspan="3" class="empty">Сначала откалибруй хотя бы один инструмент</td></tr>';
-      return;
-    }
     body.innerHTML = "";
-    names.forEach(name => {
+    NAMES.forEach(name => {
       const tr = document.createElement("tr");
       const nameTd = document.createElement("td"); nameTd.textContent = name;
-      const freqTd = document.createElement("td");
-      freqTd.textContent = profiles[name].peakHz ? Math.round(profiles[name].peakHz) + " Гц" : "Нет данных — откалибруй заново";
+      const analyzeTd = document.createElement("td");
+      const analyzeBtn = document.createElement("button");
+      analyzeBtn.textContent = calibrating && calibratingName === name ? `Калибровка ${calibrationHits}/8` : "🎙 Начать анализ";
+      analyzeBtn.disabled = calibrating;
+      analyzeBtn.addEventListener("click", () => beginCalibration(name));
+      analyzeTd.appendChild(analyzeBtn);
+
       const playTd = document.createElement("td");
-      const btn = document.createElement("button"); btn.textContent = "▶ Озвучить"; btn.style.padding = "8px 10px";
-      btn.addEventListener("click", () => playInstrumentPreview(name, profiles[name].peakHz || 180));
-      playTd.appendChild(btn); tr.append(nameTd, freqTd, playTd); body.appendChild(tr);
+      const playBtn = document.createElement("button");
+      playBtn.textContent = "▶ Прослушать";
+      playBtn.disabled = !profiles[name] || calibrating;
+      playBtn.addEventListener("click", () => {
+        if (profiles[name]) playInstrumentPreview(name, profiles[name].peakHz || 180);
+      });
+      playTd.appendChild(playBtn);
+
+      const freqTd = document.createElement("td");
+      freqTd.textContent = profiles[name] && profiles[name].peakHz ? `≈ ${Math.round(profiles[name].peakHz)} Гц` : "—";
+      tr.append(nameTd, analyzeTd, playTd, freqTd);
+      body.appendChild(tr);
     });
   }
 
@@ -414,7 +404,6 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 
   $("listenBtn").addEventListener("click", startAudio);
   $("stopBtn").addEventListener("click", stopAudio);
-  $("calibrateBtn").addEventListener("click", beginCalibration);
   $("buildNotationBtn").addEventListener("click", () => {
     if (!hitHistory.length) {
       $("notationStatus").textContent = "Сначала запиши несколько ударов с помощью анализа микрофона.";
@@ -446,7 +435,6 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   updateProfileStatus();
   renderProfiles();
   renderNotation();
-  $("calibrateBtn").disabled = false;
 })();
 </script>
 </body>
