@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>DrumLab — ритм с микрофона</title>
+<meta name="description" content="Мобильный экспериментальный прототип для калибровки звука барабанов и визуализации ритма.">
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#151d31;--panel2:#1d2942;--text:#f3f6ff;--muted:#aab6d0;--accent:#70e1c1;--warn:#ffd479;--line:#34415e}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#10182b,#090d18);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:760px;margin:auto;padding:18px 14px 40px}.top{padding:8px 2px 16px}h1{font-size:27px;line-height:1.15;margin:0 0 8px}.sub{color:var(--muted);font-size:14px;line-height:1.5}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;margin:12px 0}
+h2{font-size:17px;margin:0 0 12px}.instruments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.instrument-table{min-width:690px}.instrument-table button{font-size:12px;padding:8px 9px;min-height:40px;white-space:nowrap}.instrument-table td{min-width:140px}.instrument-table td:first-child{min-width:125px}.instrument-table td:first-child{font-weight:650;white-space:nowrap}.instrument-table td{vertical-align:middle}
+button,select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius:13px;background:var(--panel2);padding:13px 11px;min-height:48px}
+button{cursor:pointer}button:disabled{opacity:.45;cursor:default}.instrument.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.primary{width:100%;background:var(--accent);color:#09221d;border:0;font-weight:750;margin-top:10px}.secondary{width:100%;margin-top:8px}.danger{color:#ffc0c0}
+.row{display:flex;gap:9px;align-items:center}.row>*{flex:1;min-width:0}.status{font-size:14px;color:var(--muted);line-height:1.5;margin-top:10px;white-space:pre-wrap}
+.big{font-size:31px;font-weight:750;letter-spacing:-1px}.small{font-size:13px;color:var(--muted)}.meter{height:10px;background:#293650;border-radius:99px;overflow:hidden;margin:10px 0}.meter>div{height:100%;width:0;background:var(--accent);transition:width .08s}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat{background:#10182a;border-radius:12px;padding:11px}.stat b{display:block;font-size:20px;margin-top:3px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}.empty{color:var(--muted);padding:14px 0;text-align:center}
+.note{font-size:13px;color:var(--muted);line-height:1.55}.pill{display:inline-block;border:1px solid var(--line);padding:4px 8px;border-radius:99px;font-size:12px;color:var(--muted)}
+#notationWrap{overflow-x:auto;background:#0d1424;border:1px solid var(--line);border-radius:12px;padding:8px;margin-top:10px}#notation{display:block;min-width:560px;width:100%;height:190px} .legend{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.legend span{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:5px 7px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}
+@media(min-width:560px){.instruments{grid-template-columns:repeat(4,minmax(0,1fr))}.big{font-size:38px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <h1>🥁 DrumLab</h1>
+    <div class="sub">Мобильный прототип: калибровка звука барабанов через микрофон и распознавание ударов.</div>
+  </header>
+
+  <section class="panel">
+    <h2>1. Таблица барабанов и тарелок</h2>
+    <div class="note" style="margin-bottom:10px">В каждой строке своя кнопка калибровки. Нажми «Начать анализ» напротив инструмента и сыграй 8 отдельных ударов по нему. После калибровки можно прослушать реальную запись звука, сделанную во время калибровки, и увидеть примерную доминирующую частоту.</div>
+    <div class="status" id="profileStatus">Профили пока не записаны. Начни анализ в строке нужного инструмента.</div>
+    <div style="overflow-x:auto;margin-top:10px"><table class="instrument-table"><thead><tr><th>Барабан</th><th>Начать анализ барабана</th><th>Прослушать барабан</th><th>Доминирующая частота, Гц</th></tr></thead><tbody id="profilesBody"></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Визуализация ритма</h2>
+    <div class="sub">Сначала откалибруй каждый инструмент в таблице выше. Когда все профили будут готовы, нажми кнопку: приложение включит микрофон и начнёт преобразовывать удары в схему ритма прямо во время игры.</div>
+    <button class="primary" id="startConvertBtn">▶ Начать слушать и записывать ноты</button>
+    <button class="secondary" id="stopConvertBtn" disabled>■ Остановить запись</button>
+    <div class="status" id="conversionStatus" role="status">Сначала откалибруй все инструменты в таблице.</div>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><span class="small">Распознано ударов</span><b id="hitCount">0</b></div>
+      <div class="stat"><span class="small">Оценка темпа</span><b><span id="tempo">—</span> <span class="small">BPM</span></b></div>
+    </div>
+    <div id="notationWrap"><svg id="notation" viewBox="0 0 760 190" role="img" aria-label="Схема ритма в реальном времени"><text x="18" y="96" fill="#aab6d0" font-size="14">После калибровки нажми «Начать слушать и записывать ноты».</text></svg></div>
+    <div class="legend"><span>ББ — бас-барабан</span><span>МБ — малый</span><span>Т — том</span><span>ХХ — хай-хэт</span><span>Тар. — тарелки</span></div>
+    <div class="note" style="margin-top:8px">Удары отображаются на схеме сразу во время игры. Темп рассчитывается приблизительно по интервалам между ударами.</div>
+  </section>
+
+  <section class="panel">
+    <h2>Как работает калибровка</h2>
+    <div class="note">Программа анализирует спектр каждого удара и сохраняет усреднённый профиль выбранного инструмента. Затем сравнивает новые удары с сохранёнными профилями. Используется широкий спектральный отпечаток, а не одна фиксированная частота: звук барабана меняется от удара к удару.</div>
+    <div class="note" style="margin-top:8px">Важно: это экспериментальный прототип. Шум комнаты, несколько одновременных ударов и обработка звука телефоном могут ухудшать распознавание. Микрофон в браузере обычно работает только на HTTPS-сайте или localhost.</div>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const NAMES = ["Бас-барабан","Малый барабан","Том","Тарелка","Хай-хэт","Райд","Крэш","Другой"];
+  const FFT_SIZE = 8192;
+  const MIN_GAP_MS = 150;
+  const profiles = {};
+  const STORAGE_KEY = "drumlab_profiles_v3";
+  const SYMBOLS = {"Бас-барабан":"ББ","Малый барабан":"МБ","Том":"Т","Тарелка":"Тар.","Хай-хэт":"ХХ","Райд":"Райд","Крэш":"Крэш","Другой":"?"};
+  const POSITIONS = {"Бас-барабан":145,"Малый барабан":105,"Том":82,"Тарелка":48,"Хай-хэт":32,"Райд":42,"Крэш":24,"Другой":90};
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    for (const [name, p] of Object.entries(stored)) {
+      if (Array.isArray(p.feature) && p.feature.length === 96) profiles[name] = {...p, feature: Float32Array.from(p.feature)};
+    }
+  } catch (_) {}
+  let calibratingName = null;
+  let audioCtx = null, analyser = null, source = null, stream = null;
+  let raf = 0, running = false, calibrating = false, recordingMode = false;
+  let calibrationFrames = [], calibrationHits = 0, calibrationPeakHz = [], lastHitAt = 0, lastRms = 0;
+  let calibrationRecorder = null, calibrationAudioChunks = [];
+  let noiseFloor = 0.003, sessionStart = 0, hitHistory = [];
+  const AUDIO_DB = "drumlab_calibration_audio_v1";
+  let audioDbPromise = null;
+  let currentPlaybackUrl = null;
+
+  function saveProfiles() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(Object.entries(profiles).map(([name,p]) => [name,{...p,feature:Array.from(p.feature)}])))); } catch (_) {}
+  }
+
+  function updateProfileStatus() {
+    const saved = Object.keys(profiles);
+    $("profileStatus").textContent = saved.length
+      ? "Откалиброваны: " + saved.map(n => `${n} (${profiles[n].count} ударов)`).join(", ") + ". Для повторной калибровки нажми кнопку в нужной строке. Записи звука хранятся отдельно в браузере."
+      : "Профили пока не записаны. Нажми «Начать анализ» в строке нужного инструмента.";
+  }
+
+  function setStatus(text) { $("conversionStatus").textContent = text; }
+
+  function openAudioDb() {
+    if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB недоступна'));
+    if (!audioDbPromise) audioDbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(AUDIO_DB, 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('clips')) req.result.createObjectStore('clips'); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('Не удалось открыть хранилище аудио'));
+    });
+    return audioDbPromise;
+  }
+
+  async function saveCalibrationAudio(name, blob) {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('clips', 'readwrite');
+      tx.objectStore('clips').put(blob, name);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error || new Error('Не удалось сохранить запись'));
+    });
+  }
+
+  async function loadCalibrationAudio(name) {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const req = db.transaction('clips', 'readonly').objectStore('clips').get(name);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error || new Error('Не удалось загрузить запись'));
+    });
+  }
+
+  async function startAudio() {
+    if (running) return true;
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("Этот браузер не поддерживает доступ к микрофону. Открой HTTPS-ссылку в современном браузере.");
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        video: false
+      });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.resume();
+      source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = FFT_SIZE;
+      analyser.smoothingTimeConstant = 0;
+      source.connect(analyser);
+      running = true;
+      sessionStart = performance.now();
+      $("startConvertBtn").disabled = true;
+      $("stopConvertBtn").disabled = false;
+      raf = requestAnimationFrame(loop);
+      return true;
+    } catch (err) {
+      setStatus("Не удалось открыть микрофон: " + err.message + "\nОткрой страницу в браузере с HTTPS и разреши доступ к микрофону.");
+      return false;
+    }
+  }
+
+  function stopAudio() {
+    running = false;
+    calibrating = false;
+    recordingMode = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (audioCtx) audioCtx.close().catch(()=>{});
+    stream = null; audioCtx = null; analyser = null; source = null;
+    $("startConvertBtn").disabled = false;
+    $("stopConvertBtn").disabled = true;
+  }
+
+  function getSpectrum() {
+    const data = new Float32Array(analyser.frequencyBinCount);
+    analyser.getFloatFrequencyData(data);
+    return data;
+  }
+
+  function getWaveform() {
+    const data = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(data);
+    let sum = 0;
+    for (let i=0;i<data.length;i++) sum += data[i]*data[i];
+    return Math.sqrt(sum / data.length);
+  }
+
+  function makeFeatures(db) {
+    // Сводим спектр к 96 логарифмическим полосам — устойчивее, чем искать одну точную частоту.
+    const sr = audioCtx.sampleRate;
+    const nyquist = sr / 2;
+    const bands = 96;
+    const minHz = 40, maxHz = Math.min(16000, nyquist);
+    const feature = new Float32Array(bands);
+    let maxVal = -Infinity;
+    let peakBin = 1;
+    for (let i=1;i<db.length;i++) if (db[i] > maxVal) { maxVal=db[i]; peakBin=i; }
+    for (let b=0;b<bands;b++) {
+      const f0 = minHz * Math.pow(maxHz/minHz, b/bands);
+      const f1 = minHz * Math.pow(maxHz/minHz, (b+1)/bands);
+      let lo = Math.max(1, Math.floor(f0 / nyquist * (db.length*2-2)));
+      let hi = Math.min(db.length-1, Math.ceil(f1 / nyquist * (db.length*2-2)));
+      let sum=0, count=0;
+      for(let i=lo;i<=hi;i++){sum += Math.max(0, db[i] + 100); count++;}
+      feature[b] = count ? sum/count : 0;
+    }
+    // Нормализация убирает часть зависимости от громкости.
+    let mean = feature.reduce((a,b)=>a+b,0)/feature.length;
+    let norm=0;
+    for(let i=0;i<feature.length;i++){feature[i]-=mean;norm+=feature[i]*feature[i];}
+    norm = Math.sqrt(norm) || 1;
+    for(let i=0;i<feature.length;i++) feature[i]/=norm;
+    return {feature, peakHz: peakBin * sr / analyser.fftSize};
+  }
+
+  function cosine(a,b) {
+    let dot=0, na=0, nb=0;
+    for(let i=0;i<a.length;i++){dot+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i];}
+    return dot / ((Math.sqrt(na*nb)) || 1);
+  }
+
+  async function beginCalibration(name) {
+    if (recordingMode) {
+      setStatus("Сначала останови запись ритма, затем калибруй инструменты.");
+      return;
+    }
+    if (calibrating) return;
+    if (!running) {
+      const ok = await startAudio();
+      if (!ok || !running) {
+        setStatus("Не удалось включить микрофон. Разреши доступ к микрофону и попробуй ещё раз.");
+        return;
+      }
+    }
+    calibrating = true;
+    recordingMode = false;
+    calibratingName = name;
+    calibrationFrames = [];
+    calibrationPeakHz = [];
+    calibrationHits = 0;
+    calibrationAudioChunks = [];
+    if (window.MediaRecorder) {
+      try {
+        calibrationRecorder = new MediaRecorder(stream);
+        calibrationRecorder.ondataavailable = e => { if (e.data && e.data.size) calibrationAudioChunks.push(e.data); };
+        calibrationRecorder.start();
+      } catch (_) { calibrationRecorder = null; }
+    }
+    renderProfiles();
+    $("startConvertBtn").disabled = true;
+    $("stopConvertBtn").disabled = true;
+    setStatus("Калибровка: сыграй 8 отдельных ударов по инструменту «" + name + "». Запись этих ударов будет доступна кнопкой «Прослушать».");
+  }
+
+  function recordHit(features, peakHz, rms) {
+    const now = performance.now();
+    if (calibrating) {
+      calibrationFrames.push(features);
+      calibrationPeakHz.push(peakHz);
+      calibrationHits++;
+      setStatus(`Калибровка «${calibratingName}»: принято ударов ${calibrationHits}/8. Продолжай играть отдельные удары.`);
+      renderProfiles();
+      if (calibrationHits >= 8) finishCalibration();
+      return;
+    }
+    const ranked = Object.entries(profiles)
+      .map(([name,p]) => ({name, score: cosine(features,p.feature)}))
+      .sort((a,b)=>b.score-a.score);
+    let name = "Неизвестный удар", score = 0;
+    if (ranked.length && ranked[0].score > 0.42) {
+      name = ranked[0].name;
+      score = ranked[0].score;
+    }
+    addHit({time:(now-sessionStart)/1000, name, score, peakHz, rms});
+  }
+
+  function finishCalibration() {
+    const count = calibrationFrames.length;
+    if (!count) return;
+    const avg = new Float32Array(calibrationFrames[0].length);
+    calibrationFrames.forEach(f => f.forEach((v,i)=>avg[i]+=v/count));
+    let norm = Math.sqrt(avg.reduce((s,v)=>s+v*v,0)) || 1;
+    for(let i=0;i<avg.length;i++) avg[i]/=norm;
+    const avgPeakHz = calibrationPeakHz.length ? calibrationPeakHz.reduce((a,b)=>a+b,0)/calibrationPeakHz.length : 0;
+    const finishedName = calibratingName;
+    profiles[finishedName] = {feature:avg, count, peakHz:avgPeakHz, updated:new Date().toISOString()};
+    saveProfiles();
+    calibrating = false;
+    calibratingName = null;
+    const recorder = calibrationRecorder;
+    calibrationRecorder = null;
+    const finalizeRecording = async () => {
+      try {
+        if (calibrationAudioChunks.length) {
+          const blob = new Blob(calibrationAudioChunks, {type: (recorder && recorder.mimeType) || 'audio/webm'});
+          if (blob.size > 0) {
+            profiles[finishedName].audioBlob = blob;
+            try { await saveCalibrationAudio(finishedName, blob); } catch (_) { /* keep recording for this page session */ }
+          }
+        }
+      } finally {
+        calibrationAudioChunks = [];
+        renderProfiles();
+        updateProfileStatus();
+        setStatus(profiles[finishedName].audioBlob
+          ? `Готово: «${finishedName}» откалиброван. Запись калибровки сохранена — её можно прослушать в таблице.`
+          : `Профиль «${finishedName}» откалиброван, но браузер не смог сохранить аудиозапись. Повтори калибровку в браузере с поддержкой записи аудио.`);
+        stopAudio();
+      }
+    };
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = finalizeRecording;
+      try { recorder.stop(); } catch (_) { finalizeRecording(); }
+    } else {
+      finalizeRecording();
+    }
+  }
+
+  function addHit(hit) {
+    hitHistory.push(hit);
+    $("hitCount").textContent = hitHistory.length;
+    renderNotation();
+  }
+
+  function renderProfiles() {
+    const body = $("profilesBody");
+    body.innerHTML = "";
+    NAMES.forEach(name => {
+      const tr = document.createElement("tr");
+      const nameTd = document.createElement("td"); nameTd.textContent = name;
+      const analyzeTd = document.createElement("td");
+      const analyzeBtn = document.createElement("button");
+      analyzeBtn.textContent = calibrating && calibratingName === name ? `Калибровка ${calibrationHits}/8` : "🎙 Начать анализ";
+      analyzeBtn.disabled = calibrating;
+      analyzeBtn.addEventListener("click", () => beginCalibration(name));
+      analyzeTd.appendChild(analyzeBtn);
+
+      const playTd = document.createElement("td");
+      const playBtn = document.createElement("button");
+      playBtn.textContent = "▶ Прослушать";
+      playBtn.disabled = !profiles[name] || calibrating;
+      playBtn.addEventListener("click", () => { if (profiles[name]) playCalibrationRecording(name); });
+      playTd.appendChild(playBtn);
+
+      const freqTd = document.createElement("td");
+      freqTd.textContent = profiles[name] && profiles[name].peakHz ? `≈ ${Math.round(profiles[name].peakHz)} Гц` : "—";
+      tr.append(nameTd, analyzeTd, playTd, freqTd);
+      body.appendChild(tr);
+    });
+  }
+
+  async function playCalibrationRecording(name) {
+    let blob = profiles[name] && profiles[name].audioBlob;
+    if (!blob) {
+      try { blob = await loadCalibrationAudio(name); } catch (_) { blob = null; }
+    }
+    if (!blob) {
+      setStatus(`Для «${name}» нет сохранённой записи. Нажми «Начать анализ» в этой строке и откалибруй инструмент заново.`);
+      return;
+    }
+    try {
+      if (currentPlaybackUrl) URL.revokeObjectURL(currentPlaybackUrl);
+      currentPlaybackUrl = URL.createObjectURL(blob);
+      const player = new Audio(currentPlaybackUrl);
+      player.onended = () => { if (currentPlaybackUrl) URL.revokeObjectURL(currentPlaybackUrl); currentPlaybackUrl = null; };
+      player.onerror = () => setStatus("Браузер не смог воспроизвести запись. Попробуй повторить калибровку.");
+      await player.play();
+      setStatus(`Воспроизводится реальная запись калибровки инструмента «${name}».`);
+    } catch (err) {
+      setStatus("Не удалось воспроизвести запись: " + err.message);
+    }
+  }
+
+  function renderNotation() {
+    const svg = $("notation");
+    const width = Math.max(760, 110 + hitHistory.length * 48);
+    const shown = hitHistory.slice(-80);
+    const firstTime = shown.length ? shown[0].time : 0;
+    const lastTime = shown.length ? shown[shown.length-1].time : 0;
+    const span = Math.max(5, lastTime-firstTime);
+    const xFor = h => 70 + ((h.time-firstTime)/span)*(width-115);
+    let markup = `<rect width="${width}" height="190" rx="8" fill="#0d1424"/>`;
+    for (let i=0;i<5;i++) {
+      const y=35+i*29;
+      markup += `<line x1="35" y1="${y}" x2="${width-20}" y2="${y}" stroke="#64718d" stroke-width="1"/>`;
+    }
+    markup += `<text x="8" y="18" fill="#aab6d0" font-size="11">Время →</text>`;
+    if (!shown.length) markup += `<text x="55" y="105" fill="#aab6d0" font-size="14">Сыграй несколько ударов — схема появится здесь.</text>`;
+    shown.forEach((h, i) => {
+      const x=xFor(h), y=POSITIONS[h.name] || 90;
+      const isCymbal=["Тарелка","Хай-хэт","Райд","Крэш"].includes(h.name);
+      const safeName=(SYMBOLS[h.name] || "?").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      markup += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y-27}" stroke="#70e1c1" stroke-width="2"/>`;
+      markup += isCymbal ? `<ellipse cx="${x}" cy="${y}" rx="7" ry="3.5" fill="none" stroke="#ffd479" stroke-width="2"/>` : `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="#70e1c1" transform="rotate(-18 ${x} ${y})"/>`;
+      markup += `<text x="${x}" y="${y+17}" fill="#dce5fa" font-size="10" text-anchor="middle">${safeName}</text>`;
+      if (i===0 || Math.round(h.time*10)%10===0) markup += `<text x="${x}" y="180" fill="#aab6d0" font-size="10" text-anchor="middle">${h.time.toFixed(1)}с</text>`;
+    });
+    svg.setAttribute("viewBox", `0 0 ${width} 190`);
+    svg.innerHTML=markup;
+    // Оценка темпа по типичному интервалу между последовательными ударами.
+    const intervals=[];
+    for(let i=1;i<hitHistory.length;i++){const d=hitHistory[i].time-hitHistory[i-1].time;if(d>=0.22&&d<=1.5) intervals.push(d);}
+    if(intervals.length){intervals.sort((a,b)=>a-b);const med=intervals[Math.floor(intervals.length/2)];$("tempo").textContent=Math.round(60/med);}else $("tempo").textContent="—";
+  }
+
+  function loop() {
+    if (!running) return;
+    const rms = getWaveform();
+    if (rms < Math.max(noiseFloor*2,0.02)) noiseFloor = noiseFloor*0.98 + rms*0.02;
+    const threshold = Math.max(0.012, noiseFloor*3.0);
+    const attack = rms > threshold && rms > lastRms*1.22;
+    lastRms = rms;
+    const now = performance.now();
+    if ((calibrating || recordingMode) && attack && now-lastHitAt > MIN_GAP_MS) {
+      lastHitAt = now;
+      const spec = getSpectrum();
+      const result = makeFeatures(spec);
+      if (calibrating) {
+        recordHit(result.feature, result.peakHz, rms);
+      } else if (recordingMode) {
+        recordHit(result.feature, result.peakHz, rms);
+      }
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  async function startConversion() {
+    if (calibrating) {
+      setStatus("Дождись завершения калибровки.");
+      return;
+    }
+    const missing = NAMES.filter(name => !profiles[name]);
+    if (missing.length) {
+      setStatus("Ошибка: сначала откалибруй все инструменты. Не хватает: " + missing.join(", ") + ". Нажми «Начать анализ» в каждой соответствующей строке.");
+      return;
+    }
+    hitHistory = [];
+    $("hitCount").textContent = "0";
+    $("tempo").textContent = "—";
+    renderNotation();
+    recordingMode = true;
+    const ok = await startAudio();
+    if (!ok || !running) {
+      recordingMode = false;
+      return;
+    }
+    lastHitAt = 0;
+    lastRms = 0;
+    setStatus("Слушаю и преобразую удары в схему ритма в реальном времени. Нажми «Остановить запись», когда закончишь.");
+  }
+
+  $("startConvertBtn").addEventListener("click", startConversion);
+  $("stopConvertBtn").addEventListener("click", () => {
+    if (!recordingMode) return;
+    const total = hitHistory.length;
+    stopAudio();
+    setStatus(`Запись остановлена. В схеме ${total} ударов.`);
+    renderNotation();
+  });
+
+  updateProfileStatus();
+  renderProfiles();
+  renderNotation();
+})();
+</script>
+</body>
+</html>
