@@ -62,6 +62,19 @@ jobs:
           npm install @capacitor/core@^7 @capacitor/android@^7
           npm install --save-dev @capacitor/cli@^7
           npx cap add android
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          marker = '    <application'
+          permissions = (
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
+              '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n\n'
+          )
+          if 'android.permission.RECORD_AUDIO' not in s:
+              s = s.replace(marker, permissions + marker, 1)
+          p.write_text(s)
+          PY
           npx cap sync android
 
       - name: Build debug APK
