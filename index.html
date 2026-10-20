@@ -134,7 +134,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("Этот браузер не поддерживает доступ к микрофону. Открой HTTPS-ссылку в современном браузере.");
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: false },
         video: false
       });
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -257,7 +257,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     if (calibrating) {
       calibrationFrames.push(features);
       calibrationPeakHz.push(peakHz);
-      calibrationHitTimes.push({time: (now - recorderStartedAt) / 1000, peakHz});
+      calibrationHitTimes.push({time: (now - recorderStartedAt) / 1000, peakHz, rms});
       calibrationHits++;
       setStatus(`Калибровка «${calibratingName}»: принято ударов ${calibrationHits}/8. Продолжай играть отдельные удары.`);
       renderProfiles();
@@ -322,8 +322,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 
 
   async function extractRepresentativeHit(fullBlob, hitTimes, averagePeakHz) {
-    // Выбираем из восьми ударов тот, чья доминирующая частота ближе всего к среднему значению,
-    // и вырезаем только этот удар, а не всю калибровочную запись.
+    // Выбираем характерный удар по частоте и громкости, а затем уточняем его положение
+    // по реальной энергии в записанном аудио. Это защищает от сдвига таймкодов MediaRecorder.
     if (!hitTimes || !hitTimes.length) return null;
     let decodeCtx = audioCtx;
     let temporaryCtx = null;
@@ -334,12 +334,49 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       }
       const arrayBuffer = await fullBlob.arrayBuffer();
       const decoded = await decodeCtx.decodeAudioData(arrayBuffer.slice(0));
-      const chosen = hitTimes.reduce((best, h) => Math.abs(h.peakHz-averagePeakHz) < Math.abs(best.peakHz-averagePeakHz) ? h : best, hitTimes[0]);
       const sr = decoded.sampleRate;
-      const start = Math.max(0, Math.floor((chosen.time - 0.08) * sr));
-      const end = Math.min(decoded.length, Math.floor((chosen.time + 0.72) * sr));
+      const mono = new Float32Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) {
+        let sum = 0;
+        for (let ch = 0; ch < decoded.numberOfChannels; ch++) sum += decoded.getChannelData(ch)[i];
+        mono[i] = sum / decoded.numberOfChannels;
+      }
+
+      // Используем медианную громкость, чтобы случайный тихий/шумовой пик не стал образцом.
+      const loudness = hitTimes.map(h => Number(h.rms) || 0).sort((a,b) => a-b);
+      const medianRms = loudness[Math.floor(loudness.length / 2)] || 0;
+      const candidates = hitTimes.filter(h => !medianRms || (Number(h.rms) || 0) >= medianRms * 0.45);
+      const pool = candidates.length ? candidates : hitTimes;
+      const chosen = pool.reduce((best, h) => {
+        const freqScale = Math.max(80, Math.abs(averagePeakHz) * 0.35);
+        const freqScore = Math.abs((Number(h.peakHz) || 0) - averagePeakHz) / freqScale;
+        const rms = Number(h.rms) || 0;
+        const loudScore = medianRms > 0 ? Math.abs(Math.log(Math.max(rms, 1e-6) / medianRms)) * 0.35 : 0;
+        const score = freqScore + loudScore;
+        const bestFreq = Math.abs((Number(best.peakHz) || 0) - averagePeakHz) / freqScale;
+        const bestRms = Number(best.rms) || 0;
+        const bestLoud = medianRms > 0 ? Math.abs(Math.log(Math.max(bestRms, 1e-6) / medianRms)) * 0.35 : 0;
+        return score < bestFreq + bestLoud ? h : best;
+      }, pool[0]);
+
+      // Recorder time and analyser time may differ slightly on Android.
+      // Search around the estimated moment for the strongest short energy window.
+      const estimated = Math.max(0, Math.min(decoded.duration, Number(chosen.time) || 0));
+      const searchStart = Math.max(0, Math.floor((estimated - 0.28) * sr));
+      const searchEnd = Math.min(decoded.length, Math.floor((estimated + 0.28) * sr));
+      const windowSize = Math.max(1, Math.floor(sr * 0.025));
+      let bestStart = Math.floor(estimated * sr);
+      let bestEnergy = -1;
+      for (let pos = searchStart; pos + windowSize < searchEnd; pos += Math.max(1, Math.floor(sr * 0.005))) {
+        let energy = 0;
+        for (let i = pos; i < pos + windowSize; i++) energy += mono[i] * mono[i];
+        if (energy > bestEnergy) { bestEnergy = energy; bestStart = pos; }
+      }
+      // Include a short lead-in and enough decay to hear the instrument, but not the whole calibration.
+      const start = Math.max(0, bestStart - Math.floor(0.045 * sr));
+      const end = Math.min(decoded.length, bestStart + Math.floor(0.62 * sr));
       if (end <= start) return null;
-      const length = end-start;
+      const length = end - start;
       const channels = decoded.numberOfChannels;
       const wavBuffer = new ArrayBuffer(44 + length * channels * 2);
       const view = new DataView(wavBuffer);
@@ -356,7 +393,6 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       return new Blob([wavBuffer], {type:'audio/wav'});
     } catch (err) {
       console.warn('Не удалось вырезать отдельный калибровочный удар:', err);
-      // Если браузер не умеет декодировать формат записи, лучше не проигрывать все восемь ударов как один клип.
       return null;
     } finally {
       if (temporaryCtx) temporaryCtx.close().catch(()=>{});
@@ -453,9 +489,12 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   function loop() {
     if (!running) return;
     const rms = getWaveform();
-    if (rms < Math.max(noiseFloor*2,0.02)) noiseFloor = noiseFloor*0.98 + rms*0.02;
-    const threshold = Math.max(0.012, noiseFloor*3.0);
-    const attack = rms > threshold && rms > lastRms*1.22;
+    // Обновляем оценку фона только на тихих участках, чтобы сами удары не подняли порог.
+    if (rms < Math.max(noiseFloor * 2.2, 0.025)) {
+      noiseFloor = noiseFloor * 0.94 + rms * 0.06;
+    }
+    const threshold = Math.max(0.014, noiseFloor * 3.4);
+    const attack = rms > threshold && rms > lastRms * 1.28;
     lastRms = rms;
     const now = performance.now();
     if ((calibrating || recordingMode) && attack && now-lastHitAt > MIN_GAP_MS) {
