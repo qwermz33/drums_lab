@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>DrumLab — ритм с микрофона</title>
+<meta name="description" content="Мобильный экспериментальный прототип для калибровки звука барабанов и визуализации ритма.">
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#151d31;--panel2:#1d2942;--text:#f3f6ff;--muted:#aab6d0;--accent:#70e1c1;--warn:#ffd479;--line:#34415e}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#10182b,#090d18);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:760px;margin:auto;padding:18px 14px 40px}.top{padding:8px 2px 16px}h1{font-size:27px;line-height:1.15;margin:0 0 8px}.sub{color:var(--muted);font-size:14px;line-height:1.5}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;margin:12px 0}
+h2{font-size:17px;margin:0 0 12px}.instruments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.instrument-table{min-width:690px}.instrument-table button{font-size:12px;padding:8px 9px;min-height:40px;white-space:nowrap}.instrument-table td{min-width:140px}.instrument-table td:first-child{min-width:125px}.instrument-table td:first-child{font-weight:650;white-space:nowrap}.instrument-table td{vertical-align:middle}
+button,select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius:13px;background:var(--panel2);padding:13px 11px;min-height:48px}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;appearance:none;-webkit-appearance:none}button:focus{outline:none}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}button:active{background-color:rgba(255,255,255,.10);filter:brightness(1.06);box-shadow:none;transform:scale(.96)}button{transition:background-color .12s ease,filter .12s ease,transform .12s ease}.stepper{display:flex;align-items:center;gap:5px}.stepper button{width:32px;min-width:32px;height:32px;min-height:32px;padding:0;border-radius:9px;font-size:19px;font-weight:700;line-height:1}.step-value{font-size:20px;font-weight:750;min-width:24px;text-align:center;font-variant-numeric:tabular-nums}.rhythm-settings{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px;background:#10182a;border-radius:14px;margin:12px 0}.meter-stack{display:flex;align-items:center;gap:8px}.meter-numbers{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:30px}.meter-divider{width:26px;height:2px;background:var(--text);border-radius:2px}.meter-controls{display:flex;flex-direction:column;gap:5px}.meter-controls button{width:30px;min-width:30px;height:28px;min-height:28px;padding:0;border-radius:8px;font-size:17px}.bpm-control{display:flex;flex-direction:column;gap:5px}.bpm-control .stepper{gap:7px}button:disabled{opacity:.45;cursor:default}.instrument.active{border-color:var(--accent);box-shadow:none;color:var(--accent)}
+.primary{width:100%;background:var(--accent);color:#09221d;border:0;font-weight:750;margin-top:10px}.secondary{width:100%;margin-top:8px}.danger{color:#ffc0c0}
+.row{display:flex;gap:9px;align-items:center}.row>*{flex:1;min-width:0}.status{font-size:14px;color:var(--muted);line-height:1.5;margin-top:10px;white-space:pre-wrap}
+.big{font-size:31px;font-weight:750;letter-spacing:-1px}.small{font-size:13px;color:var(--muted)}.meter{height:10px;background:#293650;border-radius:99px;overflow:hidden;margin:10px 0}.meter>div{height:100%;width:0;background:var(--accent);transition:width .08s}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat{background:#10182a;border-radius:12px;padding:11px}.stat b{display:block;font-size:20px;margin-top:3px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}.empty{color:var(--muted);padding:14px 0;text-align:center}
+.note{font-size:13px;color:var(--muted);line-height:1.55}.pill{display:inline-block;border:1px solid var(--line);padding:4px 8px;border-radius:99px;font-size:12px;color:var(--muted)}
+#notationWrap{overflow-x:auto;background:#10182a;border:0;border-radius:14px;padding:12px;margin-top:10px}
+    #rhythmPanel{background:transparent;border:0;border-radius:0;padding:0;margin:12px 0}
+    #rhythmPanel #notationWrap{background:#10182a}#notation{display:block;min-width:560px;width:100%;height:190px;flex:none} .legend{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.legend span{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:5px 7px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}
+.headerbar{display:flex;align-items:center;justify-content:space-between;gap:10px}.disk-btn{width:50px;height:50px;min-height:50px;padding:0;font-size:25px;border-radius:15px;flex:0 0 50px}.preset-page{position:fixed;inset:0;z-index:50;background:var(--bg);overflow:auto;padding: max(16px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom));display:none}.preset-page.open{display:block}.preset-inner{max-width:760px;margin:auto}.preset-head{display:flex;align-items:center;gap:10px;margin-bottom:18px}.preset-head h2{font-size:23px;margin:0;flex:1}.icon-btn{width:48px;height:48px;min-height:48px;padding:0;font-size:25px}.preset-card{border:1px solid var(--line);background:var(--panel);border-radius:16px;margin:10px 0;overflow:hidden}.preset-card-head{display:flex;align-items:center;gap:10px;padding:14px;cursor:pointer}.preset-card-name{flex:1;min-width:0;font-weight:700;overflow-wrap:anywhere}.preset-meta{font-size:12px;color:var(--muted);margin-top:3px}.chevron{font-size:20px;transition:transform .15s}.preset-card.expanded .chevron{transform:rotate(180deg)}.preset-details{display:none;padding:0 10px 12px}.preset-card.expanded .preset-details{display:block}.preset-details table{font-size:12px;min-width:0;table-layout:fixed}.preset-details th,.preset-details td{padding:7px 3px;overflow-wrap:anywhere}.preset-details th:nth-child(1){width:29%}.preset-details th:nth-child(2){width:27%}.preset-details th:nth-child(3){width:24%}.preset-details th:nth-child(4){width:20%}.preset-details button{font-size:11px;padding:7px 4px;min-height:34px;width:100%;white-space:normal}.preset-actions{display:flex;gap:8px;margin:0 12px 12px}.preset-actions button{flex:1;font-size:13px;padding:9px 7px;min-height:40px}.draft-bar{display:block}.draft-bar.show{display:block}.preset-empty{text-align:center;padding:26px 12px;color:var(--muted)}.editor-head{margin-top:4px}.editor-head h2{font-size:20px}.preset-page #draftBar{margin-top:0}.preset-page #instrumentEditorPanel{margin-top:10px}
+@media(min-width:560px){.instruments{grid-template-columns:repeat(4,minmax(0,1fr))}.big{font-size:38px}}
+
+/* Увеличенный размер такта и BPM, выровненный по центру плашки. */
+.meter-stack{gap:0}
+.meter-numbers{gap:3px;min-width:0;align-items:stretch}
+.meter-number-row{display:flex;align-items:center;justify-content:center;gap:4px;min-height:32px}
+.meter-number-row .step-value{font-size:25px;min-width:27px;line-height:1.05}
+.meter-mini-controls{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;margin-top:-2px;margin-bottom:-2px}
+.meter-mini-controls button{width:20px;min-width:20px;height:16px;min-height:16px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--text);font-size:14px;font-weight:800;line-height:13px;transition:background-color .12s ease,transform .12s ease}
+.meter-mini-controls button:active{background:rgba(255,255,255,.13);filter:none;transform:scale(.88)}
+.meter-divider{width:34px;margin-left:1px}
+.bpm-control{margin-left:10px;align-self:center}
+.bpm-control .stepper button{user-select:none;-webkit-user-select:none;touch-action:none}
+.bpm-control .step-value{font-size:22px;min-width:30px}
+@media(max-width:380px){.rhythm-settings{gap:12px}.bpm-control{margin-left:4px}.meter-number-row .step-value{font-size:23px}}
+
+
+    /* Скрываем вспомогательный статус и статистику под кнопками записи. */
+    #conversionStatus,
+    #conversionStatus + .stats { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="headerbar"><h1>🥁 DrumLab</h1><button class="disk-btn" id="openPresetsBtn" aria-label="Сохранённые установки" title="Сохранённые установки">💾</button></div>
+  </header>
+
+  <section class="panel" style="display:none">
+    <h2>1. Пресеты барабанных установок</h2>
+    <div class="note">Сохраняй отдельную калибровку для каждой установки. Например, «Барабаны дома» и «Барабаны в церкви». Выбранный пресет автоматически обновляется при повторной калибровке его инструментов.</div>
+    <div class="row" style="margin-top:10px">
+      <select id="presetSelect" aria-label="Сохранённые установки"><option value="">➕ Новая установка (пустая)</option></select>
+      <button id="loadPresetBtn">↪ Выбрать</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="presetNameInput" type="text" maxlength="50" placeholder="Название, например: Барабаны дома" aria-label="Название пресета" style="flex:2;min-width:0;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:13px;padding:13px 11px;font:inherit">
+      <button id="savePresetBtn">💾 Сохранить</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="renamePresetBtn">✏️ Переименовать</button>
+      <button id="deletePresetBtn" class="danger">🗑 Удалить</button>
+    </div>
+    <div class="status" id="presetStatus">Калибруй инструменты и сохрани их в отдельный пресет.</div>
+  </section>
+
+  <section class="panel" id="rhythmPanel">
+    <div class="rhythm-settings" aria-label="Настройки ритма">
+      <div>
+        <div class="small" style="margin-bottom:7px">Размер такта</div>
+        <div class="meter-stack">
+          <div class="meter-numbers">
+            <div class="meter-number-row"><span class="step-value" id="meterTop">4</span><span class="meter-mini-controls"><button type="button" id="meterTopPlus" aria-label="Увеличить верхнее число размера">+</button><button type="button" id="meterTopMinus" aria-label="Уменьшить верхнее число размера">−</button></span></div>
+            <span class="meter-divider"></span>
+            <div class="meter-number-row"><span class="step-value" id="meterBottom">4</span><span class="meter-mini-controls"><button type="button" id="meterBottomPlus" aria-label="Следующий знаменатель размера">+</button><button type="button" id="meterBottomMinus" aria-label="Предыдущий знаменатель размера">−</button></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bpm-control">
+        <div class="small">BPM четверти</div>
+        <div class="stepper"><button type="button" id="bpmMinus" aria-label="Уменьшить BPM">−</button><span class="step-value" id="bpmValue">60</span><button type="button" id="bpmPlus" aria-label="Увеличить BPM">+</button></div>
+      </div>
+    </div>
+    <button class="primary" id="startConvertBtn">▶ Начать слушать и записывать ноты</button>
+    <button class="secondary" id="stopConvertBtn" disabled>■ Остановить запись</button>
+    <div class="status" id="conversionStatus" role="status">Выбери установку и откалибруй те инструменты, которые хочешь распознавать.</div>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><span class="small">Распознано ударов</span><b id="hitCount">0</b></div>
+      <div class="stat"><span class="small">Оценка темпа</span><b><span id="tempo">—</span> <span class="small">BPM</span></b></div>
+    </div>
+    <div id="notationWrap"><svg id="notation" viewBox="0 0 760 190" role="img" aria-label="Схема ритма в реальном времени"><text x="18" y="96" fill="#aab6d0" font-size="14">После калибровки нажми «Начать слушать и записывать ноты».</text></svg></div>
+  </section>
+
+</main>
+<div class="preset-page" id="presetPage" aria-hidden="true">
+  <div class="preset-inner">
+    <div class="preset-head"><button class="icon-btn" id="closePresetsBtn" aria-label="Назад">‹</button><h2>Мои установки</h2><button class="icon-btn" id="newPresetBtn" aria-label="Добавить установку" title="Новая установка">＋</button></div>
+    <div id="presetListView">
+      <div class="note">Нажми на установку, чтобы раскрыть её таблицу. Каждая установка хранит собственные настройки.</div>
+      <div id="presetCards"></div>
+    </div>
+    <div id="presetEditor" style="display:none">
+      <div class="preset-head editor-head"><button class="icon-btn" id="backToPresetListBtn" aria-label="К списку">‹</button><h2 id="editorTitle">Новая установка</h2><span style="width:48px"></span></div>
+      <section class="panel draft-bar show" id="draftBar">
+        <div class="note">Откалибруй инструменты в таблице ниже, введи название установки и сохрани. При повторной калибровке изменения относятся только к этой установке.</div>
+        <div class="row" style="margin-top:10px"><input id="draftName" type="text" maxlength="50" placeholder="Например: Барабаны дома" style="flex:2;min-width:0;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:13px;padding:13px 11px;font:inherit"><button id="draftSaveBtn">💾 Сохранить</button></div>
+        <div class="status" id="draftStatus">Откалибруй инструменты, затем сохрани установку.</div>
+      </section>
+      <section class="panel" id="instrumentEditorPanel">
+        <h2>Таблица инструментов</h2>
+        <div class="note" style="margin-bottom:10px">В каждой строке своя кнопка калибровки. Нажми «Начать анализ» напротив инструмента и сыграй 8 отдельных ударов. После калибровки можно прослушать запись звука и увидеть примерную доминирующую частоту.</div>
+        <div class="status" id="profileStatus">В этой установке пока нет калибровок.</div>
+        <div style="overflow-x:auto;margin-top:10px"><table class="instrument-table"><thead><tr><th>Барабан</th><th>Начать анализ барабана</th><th>Прослушать барабан</th><th>Доминирующая частота, Гц</th></tr></thead><tbody id="profilesBody"></tbody></table></div>
+      </section>
+      <button class="secondary" id="finishPresetEditingBtn">Готово — к списку установок</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const NAMES = ["Бас-барабан","Малый барабан","Том малый","Том средний","Том большой","Хэт закрытый","Хэт открытый","Хэт ногой","Райд","Крэш"];
+  const FFT_SIZE = 8192;
+  const MIN_GAP_MS = 150;
+  const profiles = {};
+  const STORAGE_KEY = "drumlab_profiles_v4";
+  const PRESETS_KEY = "drumlab_named_presets_v1";
+  const ACTIVE_PRESET_KEY = "drumlab_active_preset_v1";
+  const presets = {};
+  let activePresetName = "";
+  const SYMBOLS = {"Бас-барабан":"ББ","Малый барабан":"МБ","Том малый":"Тм","Том средний":"Тс","Том большой":"Тб","Хэт закрытый":"ХЗ","Хэт открытый":"ХО","Хэт ногой":"ХН","Райд":"Р","Крэш":"К"};
+  // Позиции для стандартного пятилинейного ударного стана: верхняя линия y=42, нижняя y=130.
+  const POSITIONS = {"Бас-барабан":151,"Малый барабан":86,"Том малый":64,"Том средний":75,"Том большой":108,"Хэт закрытый":42,"Хэт открытый":42,"Хэт ногой":141,"Райд":31,"Крэш":20};
+  function hydrateProfiles(raw) {
+    const result = {};
+    if (!raw || typeof raw !== "object") return result;
+    for (const [name, p] of Object.entries(raw)) {
+      if (p && Array.isArray(p.feature) && p.feature.length === 96) result[name] = {...p, feature: Float32Array.from(p.feature)};
+    }
+    return result;
+  }
+  function serializeProfiles(source) {
+    return Object.fromEntries(Object.entries(source).map(([name,p]) => [name,{...p,feature:Array.from(p.feature),audioBlob:undefined}]));
+  }
+  try { Object.assign(profiles, hydrateProfiles(JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"))); } catch (_) {}
+  try {
+    const storedPresets = JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}");
+    for (const [name, item] of Object.entries(storedPresets)) {
+      if (item && item.profiles) presets[name] = {profiles: hydrateProfiles(item.profiles), updated:item.updated || ""};
+    }
+    activePresetName = localStorage.getItem(ACTIVE_PRESET_KEY) || "";
+    if (activePresetName && presets[activePresetName]) {
+      Object.assign(profiles, presets[activePresetName].profiles);
+      for (const name of NAMES) if (!presets[activePresetName].profiles[name]) delete profiles[name];
+    } else activePresetName = "";
+    // Migrate older installations: keep existing per-instrument calibration as a named preset.
+    if (!Object.keys(presets).length && Object.keys(profiles).length) {
+      activePresetName = "Моя установка";
+      presets[activePresetName] = {profiles: hydrateProfiles(serializeProfiles(profiles)), updated:new Date().toISOString()};
+      localStorage.setItem(ACTIVE_PRESET_KEY, activePresetName);
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(Object.fromEntries(Object.entries(presets).map(([n,v])=>[n,{profiles:serializeProfiles(v.profiles),updated:v.updated}]))));
+    }
+  } catch (_) { activePresetName = ""; }
+  let calibratingName = null;
+  let audioCtx = null, analyser = null, source = null, stream = null;
+  let raf = 0, running = false, calibrating = false, recordingMode = false;
+  let calibrationFrames = [], calibrationHits = 0, calibrationPeakHz = [], calibrationHitTimes = [], recorderStartedAt = 0, lastHitAt = 0, lastRms = 0;
+  let calibrationRecorder = null, calibrationAudioChunks = [];
+  let noiseFloor = 0.003, sessionStart = 0, hitHistory = [];
+  const AUDIO_DB = "drumlab_calibration_audio_v1";
+  let audioDbPromise = null;
+  let currentPlaybackUrl = null;
+
+  function savePresetStorage() {
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(Object.fromEntries(Object.entries(presets).map(([n,v])=>[n,{profiles:serializeProfiles(v.profiles),updated:v.updated}]))));
+      localStorage.setItem(ACTIVE_PRESET_KEY, activePresetName || "");
+    } catch (_) { $("presetStatus").textContent = "Не удалось сохранить пресеты в памяти браузера. Возможно, хранилище заполнено."; }
+  }
+
+  function saveProfiles() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeProfiles(profiles))); } catch (_) {}
+    if (activePresetName && presets[activePresetName]) {
+      presets[activePresetName] = {profiles:hydrateProfiles(serializeProfiles(profiles)),updated:new Date().toISOString()};
+      savePresetStorage();
+    }
+  }
+
+  function updateProfileStatus() {
+    const saved = Object.keys(profiles);
+    $("profileStatus").textContent = saved.length
+      ? "Активная установка" + (activePresetName ? ` «${activePresetName}»` : " (ещё не сохранена как пресет)") + ". Откалиброваны: " + saved.map(n => `${n} (${profiles[n].count} ударов)`).join(", ") + ". Записи звука хранятся отдельно."
+      : "В этой установке пока нет калибровок. Нажми «Начать анализ» в строке нужного инструмента.";
+  }
+
+  function renderPresets() {
+    const select = $("presetSelect");
+    const keep = activePresetName;
+    select.innerHTML = "";
+    const blank = document.createElement("option"); blank.value = ""; blank.textContent = "➕ Новая установка (пустая)"; select.appendChild(blank);
+    Object.keys(presets).sort((a,b)=>a.localeCompare(b,"ru")).forEach(name => {
+      const option = document.createElement("option"); option.value = name; option.textContent = name; select.appendChild(option);
+    });
+    select.value = keep && presets[keep] ? keep : "";
+    $("presetNameInput").value = keep || "";
+    $("renamePresetBtn").disabled = !keep;
+    $("deletePresetBtn").disabled = !keep;
+    $("presetStatus").textContent = keep
+      ? `Активный пресет: «${keep}». Изменения калибровки сохраняются в нём автоматически.`
+      : "Выбери сохранённый пресет или откалибруй установку и сохрани её под новым названием.";
+  }
+
+  function loadPreset(name) {
+    if (calibrating || recordingMode) { $("presetStatus").textContent = "Сначала закончи калибровку или останови запись ритма."; return; }
+    if (!name || !presets[name]) {
+      activePresetName = "";
+      Object.keys(profiles).forEach(n => delete profiles[n]);
+      try { localStorage.setItem(STORAGE_KEY, "{}"); } catch (_) {}
+      savePresetStorage(); renderProfiles(); updateProfileStatus(); renderPresets();
+      $("presetStatus").textContent = "Выбрана пустая текущая калибровка. Сохранённые пресеты не удалены.";
+      return;
+    }
+    activePresetName = name;
+    Object.keys(profiles).forEach(n => delete profiles[n]);
+    Object.assign(profiles, hydrateProfiles(serializeProfiles(presets[name].profiles)));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeProfiles(profiles))); } catch (_) {}
+    savePresetStorage(); renderProfiles(); updateProfileStatus(); renderPresets();
+    $("presetStatus").textContent = `Загружен пресет «${name}». Можно сразу начинать запись ритма.`;
+  }
+
+  function saveCurrentAsPreset() {
+    if (calibrating || recordingMode) { $("presetStatus").textContent = "Сначала закончи калибровку или останови запись ритма."; return; }
+    const name = $("presetNameInput").value.trim();
+    if (!name) { $("presetStatus").textContent = "Введи название пресета."; return; }
+    if (!Object.keys(profiles).length) { $("presetStatus").textContent = "Сначала откалибруй хотя бы один инструмент."; return; }
+    if (presets[name] && name !== activePresetName && !confirm(`Пресет «${name}» уже существует. Перезаписать его текущей калибровкой?`)) return;
+    activePresetName = name;
+    presets[name] = {profiles:hydrateProfiles(serializeProfiles(profiles)),updated:new Date().toISOString()};
+    saveProfiles(); savePresetStorage(); renderPresets(); updateProfileStatus();
+    $("presetStatus").textContent = `Пресет «${name}» сохранён. Его можно выбрать в списке в любое время.`;
+  }
+
+  function renameActivePreset() {
+    if (!activePresetName || !presets[activePresetName]) return;
+    const next = $("presetNameInput").value.trim();
+    if (!next) { $("presetStatus").textContent = "Введи новое название."; return; }
+    if (next === activePresetName) return;
+    if (presets[next]) { $("presetStatus").textContent = "Такое название уже есть. Выбери другое."; return; }
+    presets[next] = presets[activePresetName]; delete presets[activePresetName]; activePresetName = next;
+    savePresetStorage(); renderPresets(); updateProfileStatus();
+    $("presetStatus").textContent = `Пресет переименован в «${next}».`;
+  }
+
+  function deleteActivePreset() {
+    if (!activePresetName || !presets[activePresetName]) return;
+    const old = activePresetName;
+    if (!confirm(`Удалить пресет «${old}»? Это нельзя отменить.`)) return;
+    delete presets[old]; activePresetName = "";
+    Object.keys(profiles).forEach(n => delete profiles[n]);
+    try { localStorage.setItem(STORAGE_KEY, "{}"); } catch (_) {}
+    savePresetStorage(); renderProfiles(); updateProfileStatus(); renderPresets();
+    $("presetStatus").textContent = `Пресет «${old}» удалён. Остальные пресеты сохранены.`;
+  }
+
+  function openPresetPage() {
+    $("presetEditor").style.display = "none"; $("presetListView").style.display = "block"; $("newPresetBtn").style.visibility = "visible";
+    renderPresetCards();
+    $("presetPage").classList.add("open");
+    $("presetPage").setAttribute("aria-hidden", "false");
+  }
+  function closePresetPage() {
+    $("presetPage").classList.remove("open");
+    $("presetPage").setAttribute("aria-hidden", "true");
+  }
+  function showPresetEditor(name, isNew=false) {
+    if (calibrating || recordingMode) { alert("Сначала закончи текущую калибровку или останови запись ритма."); return; }
+    if (isNew) {
+      activePresetName = "";
+      Object.keys(profiles).forEach(n => delete profiles[n]);
+      try { localStorage.setItem(STORAGE_KEY, "{}"); } catch (_) {}
+      savePresetStorage();
+      $("draftName").value = "";
+      $("editorTitle").textContent = "Новая установка";
+      $("draftStatus").textContent = "Откалибруй нужные инструменты, затем введи название и сохрани установку.";
+    } else {
+      loadPreset(name);
+      $("draftName").value = name;
+      $("editorTitle").textContent = "Установка: " + name;
+      $("draftStatus").textContent = "Изменения калибровки будут сохранены в этой установке.";
+    }
+    $("presetListView").style.display = "none";
+    $("presetEditor").style.display = "block";
+    $("newPresetBtn").style.visibility = "hidden";
+    renderProfiles(); updateProfileStatus();
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+  function startNewPreset() { showPresetEditor("", true); }
+  function returnToPresetList() {
+    if (calibrating) { alert("Дождись окончания калибровки."); return; }
+    $("presetEditor").style.display = "none";
+    $("presetListView").style.display = "block";
+    $("newPresetBtn").style.visibility = "visible";
+    renderPresetCards();
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+  function saveDraftPreset() {
+    const name = $("draftName").value.trim();
+    if (!name) { $("draftStatus").textContent = "Сначала введи название установки."; return; }
+    if (!Object.keys(profiles).length) { $("draftStatus").textContent = "Сначала откалибруй хотя бы один инструмент."; return; }
+    if (presets[name] && name !== activePresetName) { $("draftStatus").textContent = "Установка с таким названием уже есть. Выбери другое название."; return; }
+    if (activePresetName && activePresetName !== name && presets[activePresetName]) delete presets[activePresetName];
+    activePresetName = name;
+    presets[name] = {profiles:hydrateProfiles(serializeProfiles(profiles)),updated:new Date().toISOString()};
+    saveProfiles(); savePresetStorage(); renderPresets(); updateProfileStatus(); renderProfiles();
+    $("editorTitle").textContent = "Установка: " + name;
+    $("draftStatus").textContent = `«${name}» сохранена. Все калибровки этой установки записаны.`;
+    renderPresetCards();
+  }
+  function renderPresetCards() {
+    const host = $("presetCards"); host.innerHTML = "";
+    const names = Object.keys(presets).sort((a,b)=>a.localeCompare(b,"ru"));
+    if (!names.length) { host.innerHTML = '<div class="preset-empty">Пока нет сохранённых установок.<br>Нажми ＋, чтобы откалибровать первую.</div>'; return; }
+    names.forEach(name => {
+      const preset = presets[name];
+      const count = Object.keys(preset.profiles || {}).length;
+      const card = document.createElement("div"); card.className = "preset-card";
+      const head = document.createElement("div"); head.className = "preset-card-head"; head.setAttribute("role","button"); head.setAttribute("tabindex","0");
+      const title = document.createElement("div"); title.className = "preset-card-name";
+      const nm = document.createElement("div"); nm.textContent = name;
+      const meta = document.createElement("div"); meta.className="preset-meta"; meta.textContent = `${count}/10 инструментов откалибровано`;
+      title.append(nm,meta);
+      const arrow=document.createElement("span"); arrow.className="chevron"; arrow.textContent="⌄";
+      head.append(title,arrow); head.addEventListener("click",()=>card.classList.toggle("expanded"));
+      head.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();card.classList.toggle("expanded");}});
+      const details=document.createElement("div"); details.className="preset-details";
+      const table=document.createElement("table");
+      table.innerHTML='<thead><tr><th>Инструмент</th><th>Калибровка</th><th>Звук</th><th>Гц</th></tr></thead>';
+      const tbody=document.createElement("tbody");
+      NAMES.forEach(instr=>{
+        const p=preset.profiles && preset.profiles[instr]; const tr=document.createElement("tr");
+        const td1=document.createElement("td");td1.textContent=instr;
+        const td2=document.createElement("td");const cal=document.createElement("button");cal.textContent=p?"Повторить":"Калибровать";cal.addEventListener("click",async e=>{e.stopPropagation();showPresetEditor(name,false);await beginCalibration(instr);});td2.appendChild(cal);
+        const td3=document.createElement("td");const play=document.createElement("button");play.textContent="▶";play.title="Прослушать калибровку";play.disabled=!p;play.addEventListener("click",e=>{e.stopPropagation();loadPreset(name);playCalibrationRecording(instr);});td3.appendChild(play);
+        const td4=document.createElement("td");td4.textContent=p&&p.peakHz?String(Math.round(p.peakHz)):"—";
+        tr.append(td1,td2,td3,td4);tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);details.appendChild(table);
+      const actions=document.createElement("div");actions.className="preset-actions";
+      const use=document.createElement("button");use.textContent="✓ Выбрать эту установку";use.addEventListener("click",()=>{loadPreset(name);$("draftBar").classList.remove("show");closePresetPage();});
+      const rename=document.createElement("button");rename.textContent="✏️ Имя";rename.addEventListener("click",()=>{const next=prompt("Новое название установки:",name);if(!next||!next.trim()||next.trim()===name)return;const clean=next.trim();if(presets[clean]){alert("Такое название уже существует.");return;}presets[clean]=presets[name];delete presets[name];if(activePresetName===name)activePresetName=clean;savePresetStorage();renderPresets();renderPresetCards();});
+      const del=document.createElement("button");del.textContent="🗑";del.title="Удалить установку";del.className="danger";del.addEventListener("click",()=>{if(!confirm(`Удалить установку «${name}»?`))return;delete presets[name];if(activePresetName===name){activePresetName="";Object.keys(profiles).forEach(n=>delete profiles[n]);try{localStorage.setItem(STORAGE_KEY,"{}");}catch(_){}}savePresetStorage();renderPresets();renderProfiles();updateProfileStatus();renderPresetCards();});
+      actions.append(use,rename,del);details.appendChild(actions);
+      card.append(head,details);host.appendChild(card);
+    });
+  }
+
+  function setStatus(text) { $("conversionStatus").textContent = text; }
+
+  function openAudioDb() {
+    if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB недоступна'));
+    if (!audioDbPromise) audioDbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(AUDIO_DB, 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('clips')) req.result.createObjectStore('clips'); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('Не удалось открыть хранилище аудио'));
+    });
+    return audioDbPromise;
+  }
+
+  async function saveCalibrationAudio(name, blob) {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('clips', 'readwrite');
+      tx.objectStore('clips').put(blob, name);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error || new Error('Не удалось сохранить запись'));
+    });
+  }
+
+  async function loadCalibrationAudio(name) {
+    const db = await openAudioDb();
+    return new Promise((resolve, reject) => {
+      const req = db.transaction('clips', 'readonly').objectStore('clips').get(name);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error || new Error('Не удалось загрузить запись'));
+    });
+  }
+
+  async function startAudio() {
+    if (running) return true;
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("Этот браузер не поддерживает доступ к микрофону. Открой HTTPS-ссылку в современном браузере.");
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: false },
+        video: false
+      });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.resume();
+      source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = FFT_SIZE;
+      analyser.smoothingTimeConstant = 0;
+      source.connect(analyser);
+      running = true;
+      sessionStart = performance.now();
+      $("startConvertBtn").disabled = true;
+      $("stopConvertBtn").disabled = false;
+      raf = requestAnimationFrame(loop);
+      return true;
+    } catch (err) {
+      setStatus("Не удалось открыть микрофон: " + err.message + "\nОткрой страницу в браузере с HTTPS и разреши доступ к микрофону.");
+      return false;
+    }
+  }
+
+  function stopAudio() {
+    running = false;
+    calibrating = false;
+    recordingMode = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (audioCtx) audioCtx.close().catch(()=>{});
+    stream = null; audioCtx = null; analyser = null; source = null;
+    $("startConvertBtn").disabled = false;
+    $("stopConvertBtn").disabled = true;
+  }
+
+  function getSpectrum() {
+    const data = new Float32Array(analyser.frequencyBinCount);
+    analyser.getFloatFrequencyData(data);
+    return data;
+  }
+
+  function getWaveform() {
+    const data = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(data);
+    let sum = 0;
+    for (let i=0;i<data.length;i++) sum += data[i]*data[i];
+    return Math.sqrt(sum / data.length);
+  }
+
+  function makeFeatures(db) {
+    // Сводим спектр к 96 логарифмическим полосам — устойчивее, чем искать одну точную частоту.
+    const sr = audioCtx.sampleRate;
+    const nyquist = sr / 2;
+    const bands = 96;
+    const minHz = 40, maxHz = Math.min(16000, nyquist);
+    const feature = new Float32Array(bands);
+    let maxVal = -Infinity;
+    let peakBin = 1;
+    for (let i=1;i<db.length;i++) if (db[i] > maxVal) { maxVal=db[i]; peakBin=i; }
+    for (let b=0;b<bands;b++) {
+      const f0 = minHz * Math.pow(maxHz/minHz, b/bands);
+      const f1 = minHz * Math.pow(maxHz/minHz, (b+1)/bands);
+      let lo = Math.max(1, Math.floor(f0 / nyquist * (db.length*2-2)));
+      let hi = Math.min(db.length-1, Math.ceil(f1 / nyquist * (db.length*2-2)));
+      let sum=0, count=0;
+      for(let i=lo;i<=hi;i++){sum += Math.max(0, db[i] + 100); count++;}
+      feature[b] = count ? sum/count : 0;
+    }
+    // Нормализация убирает часть зависимости от громкости.
+    let mean = feature.reduce((a,b)=>a+b,0)/feature.length;
+    let norm=0;
+    for(let i=0;i<feature.length;i++){feature[i]-=mean;norm+=feature[i]*feature[i];}
+    norm = Math.sqrt(norm) || 1;
+    for(let i=0;i<feature.length;i++) feature[i]/=norm;
+    return {feature, peakHz: peakBin * sr / analyser.fftSize};
+  }
+
+  function cosine(a,b) {
+    let dot=0, na=0, nb=0;
+    for(let i=0;i<a.length;i++){dot+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i];}
+    return dot / ((Math.sqrt(na*nb)) || 1);
+  }
+
+  async function beginCalibration(name) {
+    if (recordingMode) {
+      setStatus("Сначала останови запись ритма, затем калибруй инструменты.");
+      return;
+    }
+    if (calibrating) return;
+    if (!running) {
+      const ok = await startAudio();
+      if (!ok || !running) {
+        setStatus("Не удалось включить микрофон. Разреши доступ к микрофону и попробуй ещё раз.");
+        return;
+      }
+    }
+    calibrating = true;
+    recordingMode = false;
+    calibratingName = name;
+    calibrationFrames = [];
+    calibrationPeakHz = [];
+    calibrationHitTimes = [];
+    calibrationHits = 0;
+    calibrationAudioChunks = [];
+    if (window.MediaRecorder) {
+      try {
+        calibrationRecorder = new MediaRecorder(stream);
+        calibrationRecorder.ondataavailable = e => { if (e.data && e.data.size) calibrationAudioChunks.push(e.data); };
+        recorderStartedAt = performance.now();
+        calibrationRecorder.start();
+      } catch (_) { calibrationRecorder = null; }
+    }
+    renderProfiles();
+    $("startConvertBtn").disabled = true;
+    $("stopConvertBtn").disabled = true;
+    setStatus("Калибровка: сыграй 8 отдельных ударов по инструменту «" + name + "». Запись этих ударов будет доступна кнопкой «Прослушать».");
+  }
+
+  function recordHit(features, peakHz, rms) {
+    const now = performance.now();
+    if (calibrating) {
+      calibrationFrames.push(features);
+      calibrationPeakHz.push(peakHz);
+      calibrationHitTimes.push({time: (now - recorderStartedAt) / 1000, peakHz, rms});
+      calibrationHits++;
+      setStatus(`Калибровка «${calibratingName}»: принято ударов ${calibrationHits}/8. Продолжай играть отдельные удары.`);
+      renderProfiles();
+      if (calibrationHits >= 8) finishCalibration();
+      return;
+    }
+    const ranked = Object.entries(profiles)
+      .map(([name,p]) => ({name, score: cosine(features,p.feature)}))
+      .sort((a,b)=>b.score-a.score);
+    // Сопоставляем только с откалиброванными профилями. Если сходство слишком слабое,
+    // считаем звук фоном/неизвестным и не добавляем его в нотную запись.
+    if (!ranked.length || ranked[0].score < 0.42) return;
+    const {name, score} = ranked[0];
+    if (!SYMBOLS[name]) return;
+    addHit({time:(now-sessionStart)/1000, name, score, peakHz, rms});
+  }
+
+  function finishCalibration() {
+    const count = calibrationFrames.length;
+    if (!count) return;
+    const avg = new Float32Array(calibrationFrames[0].length);
+    calibrationFrames.forEach(f => f.forEach((v,i)=>avg[i]+=v/count));
+    let norm = Math.sqrt(avg.reduce((s,v)=>s+v*v,0)) || 1;
+    for(let i=0;i<avg.length;i++) avg[i]/=norm;
+    const avgPeakHz = calibrationPeakHz.length ? calibrationPeakHz.reduce((a,b)=>a+b,0)/calibrationPeakHz.length : 0;
+    const finishedName = calibratingName;
+    const audioKey = (activePresetName || "__current__") + "::" + finishedName;
+    profiles[finishedName] = {feature:avg, count, peakHz:avgPeakHz, updated:new Date().toISOString(), audioKey};
+    saveProfiles();
+    calibrating = false;
+    calibratingName = null;
+    const recorder = calibrationRecorder;
+    calibrationRecorder = null;
+    const finalizeRecording = async () => {
+      try {
+        if (calibrationAudioChunks.length) {
+          const fullBlob = new Blob(calibrationAudioChunks, {type: (recorder && recorder.mimeType) || 'audio/webm'});
+          if (fullBlob.size > 0) {
+            const representative = await extractRepresentativeHit(fullBlob, calibrationHitTimes, avgPeakHz);
+            if (representative) {
+              profiles[finishedName].audioBlob = representative;
+              saveProfiles();
+              try { await saveCalibrationAudio(audioKey, representative); } catch (_) { /* keep recording for this page session */ }
+            }
+          }
+        }
+      } finally {
+        calibrationAudioChunks = [];
+        renderProfiles();
+        updateProfileStatus();
+        setStatus(profiles[finishedName].audioBlob
+          ? `Готово: «${finishedName}» откалиброван. Запись калибровки сохранена — её можно прослушать в таблице.`
+          : `Профиль «${finishedName}» откалиброван, но браузер не смог сохранить аудиозапись. Повтори калибровку в браузере с поддержкой записи аудио.`);
+        stopAudio();
+      }
+    };
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = finalizeRecording;
+      try { recorder.stop(); } catch (_) { finalizeRecording(); }
+    } else {
+      finalizeRecording();
+    }
+  }
+
+
+  async function extractRepresentativeHit(fullBlob, hitTimes, averagePeakHz) {
+    // Выбираем характерный удар по частоте и громкости, а затем уточняем его положение
+    // по реальной энергии в записанном аудио. Это защищает от сдвига таймкодов MediaRecorder.
+    if (!hitTimes || !hitTimes.length) return null;
+    let decodeCtx = audioCtx;
+    let temporaryCtx = null;
+    try {
+      if (!decodeCtx || !decodeCtx.decodeAudioData) {
+        temporaryCtx = new (window.AudioContext || window.webkitAudioContext)();
+        decodeCtx = temporaryCtx;
+      }
+      const arrayBuffer = await fullBlob.arrayBuffer();
+      const decoded = await decodeCtx.decodeAudioData(arrayBuffer.slice(0));
+      const sr = decoded.sampleRate;
+      const mono = new Float32Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) {
+        let sum = 0;
+        for (let ch = 0; ch < decoded.numberOfChannels; ch++) sum += decoded.getChannelData(ch)[i];
+        mono[i] = sum / decoded.numberOfChannels;
+      }
+
+      // Используем медианную громкость, чтобы случайный тихий/шумовой пик не стал образцом.
+      const loudness = hitTimes.map(h => Number(h.rms) || 0).sort((a,b) => a-b);
+      const medianRms = loudness[Math.floor(loudness.length / 2)] || 0;
+      const candidates = hitTimes.filter(h => !medianRms || (Number(h.rms) || 0) >= medianRms * 0.45);
+      const pool = candidates.length ? candidates : hitTimes;
+      const chosen = pool.reduce((best, h) => {
+        const freqScale = Math.max(80, Math.abs(averagePeakHz) * 0.35);
+        const freqScore = Math.abs((Number(h.peakHz) || 0) - averagePeakHz) / freqScale;
+        const rms = Number(h.rms) || 0;
+        const loudScore = medianRms > 0 ? Math.abs(Math.log(Math.max(rms, 1e-6) / medianRms)) * 0.35 : 0;
+        const score = freqScore + loudScore;
+        const bestFreq = Math.abs((Number(best.peakHz) || 0) - averagePeakHz) / freqScale;
+        const bestRms = Number(best.rms) || 0;
+        const bestLoud = medianRms > 0 ? Math.abs(Math.log(Math.max(bestRms, 1e-6) / medianRms)) * 0.35 : 0;
+        return score < bestFreq + bestLoud ? h : best;
+      }, pool[0]);
+
+      // Recorder time and analyser time may differ slightly on Android.
+      // Search around the estimated moment for the strongest short energy window.
+      const estimated = Math.max(0, Math.min(decoded.duration, Number(chosen.time) || 0));
+      const searchStart = Math.max(0, Math.floor((estimated - 0.28) * sr));
+      const searchEnd = Math.min(decoded.length, Math.floor((estimated + 0.28) * sr));
+      const windowSize = Math.max(1, Math.floor(sr * 0.025));
+      let bestStart = Math.floor(estimated * sr);
+      let bestEnergy = -1;
+      for (let pos = searchStart; pos + windowSize < searchEnd; pos += Math.max(1, Math.floor(sr * 0.005))) {
+        let energy = 0;
+        for (let i = pos; i < pos + windowSize; i++) energy += mono[i] * mono[i];
+        if (energy > bestEnergy) { bestEnergy = energy; bestStart = pos; }
+      }
+      // Include a short lead-in and enough decay to hear the instrument, but not the whole calibration.
+      const start = Math.max(0, bestStart - Math.floor(0.045 * sr));
+      const end = Math.min(decoded.length, bestStart + Math.floor(0.62 * sr));
+      if (end <= start) return null;
+      const length = end - start;
+      const channels = decoded.numberOfChannels;
+      const wavBuffer = new ArrayBuffer(44 + length * channels * 2);
+      const view = new DataView(wavBuffer);
+      const writeStr = (offset, str) => { for (let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); };
+      writeStr(0,'RIFF'); view.setUint32(4,36+length*channels*2,true); writeStr(8,'WAVE');
+      writeStr(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,channels,true);
+      view.setUint32(24,sr,true); view.setUint32(28,sr*channels*2,true); view.setUint16(32,channels*2,true); view.setUint16(34,16,true);
+      writeStr(36,'data'); view.setUint32(40,length*channels*2,true);
+      let offset=44;
+      for (let i=0;i<length;i++) for (let ch=0;ch<channels;ch++) {
+        const sample = Math.max(-1,Math.min(1,decoded.getChannelData(ch)[start+i]));
+        view.setInt16(offset, sample < 0 ? sample*32768 : sample*32767, true); offset+=2;
+      }
+      return new Blob([wavBuffer], {type:'audio/wav'});
+    } catch (err) {
+      console.warn('Не удалось вырезать отдельный калибровочный удар:', err);
+      return null;
+    } finally {
+      if (temporaryCtx) temporaryCtx.close().catch(()=>{});
+    }
+  }
+
+  function addHit(hit) {
+    hitHistory.push(hit);
+    $("hitCount").textContent = hitHistory.length;
+    renderNotation();
+  }
+
+  function renderProfiles() {
+    const body = $("profilesBody");
+    body.innerHTML = "";
+    NAMES.forEach(name => {
+      const tr = document.createElement("tr");
+      const nameTd = document.createElement("td"); nameTd.textContent = name;
+      const analyzeTd = document.createElement("td");
+      const analyzeBtn = document.createElement("button");
+      analyzeBtn.textContent = calibrating && calibratingName === name ? `Калибровка ${calibrationHits}/8` : "🎙 Начать анализ";
+      analyzeBtn.disabled = calibrating;
+      analyzeBtn.addEventListener("click", () => beginCalibration(name));
+      analyzeTd.appendChild(analyzeBtn);
+
+      const playTd = document.createElement("td");
+      const playBtn = document.createElement("button");
+      playBtn.textContent = "▶ Прослушать";
+      playBtn.disabled = !profiles[name] || calibrating;
+      playBtn.addEventListener("click", () => { if (profiles[name]) playCalibrationRecording(name); });
+      playTd.appendChild(playBtn);
+
+      const freqTd = document.createElement("td");
+      freqTd.textContent = profiles[name] && profiles[name].peakHz ? `≈ ${Math.round(profiles[name].peakHz)} Гц` : "—";
+      tr.append(nameTd, analyzeTd, playTd, freqTd);
+      body.appendChild(tr);
+    });
+  }
+
+  async function playCalibrationRecording(name) {
+    const profile = profiles[name];
+    let blob = profile && profile.audioBlob;
+    if (!blob) {
+      try { blob = await loadCalibrationAudio((profile && profile.audioKey) || name); } catch (_) { blob = null; }
+      if (!blob && profile && profile.audioKey) { try { blob = await loadCalibrationAudio(name); } catch (_) { blob = null; } }
+    }
+    if (!blob) {
+      setStatus(`Для «${name}» нет сохранённой записи. Нажми «Начать анализ» в этой строке и откалибруй инструмент заново.`);
+      return;
+    }
+    try {
+      if (currentPlaybackUrl) URL.revokeObjectURL(currentPlaybackUrl);
+      currentPlaybackUrl = URL.createObjectURL(blob);
+      const player = new Audio(currentPlaybackUrl);
+      player.onended = () => { if (currentPlaybackUrl) URL.revokeObjectURL(currentPlaybackUrl); currentPlaybackUrl = null; };
+      player.onerror = () => setStatus("Браузер не смог воспроизвести запись. Попробуй повторить калибровку.");
+      await player.play();
+      setStatus(`Воспроизводится реальная запись калибровки инструмента «${name}».`);
+    } catch (err) {
+      setStatus("Не удалось воспроизвести запись: " + err.message);
+    }
+  }
+
+  function renderNotation() {
+    const svg = $("notation");
+    const width = Math.max(760, 110 + hitHistory.length * 48);
+    const shown = hitHistory.slice(-80);
+    const firstTime = shown.length ? shown[0].time : 0;
+    const lastTime = shown.length ? shown[shown.length-1].time : 0;
+    const span = Math.max(5, lastTime-firstTime);
+    const leftMargin = 20;
+    const rightMargin = leftMargin;
+    const xFor = h => 78 + ((h.time-firstTime)/span)*(width-126);
+    let markup = ``;
+    // Прямоугольный условный ключ ударных, расположенный прямо на нотном стане.
+    markup += `<text x="51" y="72" fill="#dce5fa" font-size="17" font-weight="650" text-anchor="middle">${meterTop}</text>`;
+    markup += `<text x="51" y="113" fill="#dce5fa" font-size="17" font-weight="650" text-anchor="middle">${meterBottom}</text>`;
+    // Пять линий нотного стана; позиции нот соответствуют принятой схеме ударной установки.
+    for (let i=0;i<5;i++) {
+      const y=42+i*22;
+      markup += `<line x1="${leftMargin}" y1="${y}" x2="${width-rightMargin}" y2="${y}" stroke="#8793ad" stroke-width="1.2"/>`;
+    }
+    markup += `<rect x="${leftMargin+5}" y="42" width="13" height="88" fill="none" stroke="#dce5fa" stroke-width="2.5"/>`;
+    shown.forEach((h, i) => {
+      // Не показываем неизвестные события и никогда не рисуем условные «??».
+      if (!POSITIONS.hasOwnProperty(h.name) || !SYMBOLS[h.name]) return;
+      const x=xFor(h), y=POSITIONS[h.name];
+      const isCymbal=["Хэт закрытый","Хэт открытый","Хэт ногой","Райд","Крэш"].includes(h.name);
+      const isOpenHat=h.name === "Хэт открытый";
+      const safeName=SYMBOLS[h.name].replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      markup += `<line x1="${x+5}" y1="${y}" x2="${x+5}" y2="${y-25}" stroke="#70e1c1" stroke-width="1.8"/>`;
+      if (isCymbal) {
+        // В ударной нотации тарелки и хэты обозначаются крестиком, открытый хэт — с кружком.
+        markup += `<path d="M ${x-5} ${y-5} L ${x+5} ${y+5} M ${x+5} ${y-5} L ${x-5} ${y+5}" fill="none" stroke="#ffd479" stroke-width="2.2" stroke-linecap="round"/>`;
+        if (isOpenHat) markup += `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#ffd479" stroke-width="1.5"/>`;
+      } else {
+        markup += `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="#70e1c1" stroke="#70e1c1" transform="rotate(-18 ${x} ${y})"/>`;
+      }
+      markup += `<text x="${x}" y="${Math.min(169,y+15)}" fill="#dce5fa" font-size="9" text-anchor="middle">${safeName}</text>`;
+      if (i===0 || Math.round(h.time*10)%10===0) markup += `<text x="${x}" y="183" fill="#aab6d0" font-size="10" text-anchor="middle">${h.time.toFixed(1)}с</text>`;
+    });
+    svg.setAttribute("viewBox", `0 0 ${width} 190`);
+    // Реальная ширина SVG должна соответствовать ширине схемы: иначе viewBox сжимается
+    // до ширины телефона и крайний правый отступ визуально пропадает.
+    svg.setAttribute("width", String(width));
+    svg.style.width = `${width}px`;
+    svg.style.minWidth = `${width}px`;
+    svg.innerHTML=markup;
+    // Оценка темпа по типичному интервалу между последовательными ударами.
+    const intervals=[];
+    for(let i=1;i<hitHistory.length;i++){const d=hitHistory[i].time-hitHistory[i-1].time;if(d>=0.22&&d<=1.5) intervals.push(d);}
+    if(intervals.length){intervals.sort((a,b)=>a-b);const med=intervals[Math.floor(intervals.length/2)];$("tempo").textContent=Math.round(60/med);}else $("tempo").textContent="—";
+  }
+
+  function loop() {
+    if (!running) return;
+    const rms = getWaveform();
+    // Обновляем оценку фона только на тихих участках, чтобы сами удары не подняли порог.
+    if (rms < Math.max(noiseFloor * 2.2, 0.025)) {
+      noiseFloor = noiseFloor * 0.94 + rms * 0.06;
+    }
+    const threshold = Math.max(0.014, noiseFloor * 3.4);
+    const attack = rms > threshold && rms > lastRms * 1.28;
+    lastRms = rms;
+    const now = performance.now();
+    if ((calibrating || recordingMode) && attack && now-lastHitAt > MIN_GAP_MS) {
+      lastHitAt = now;
+      const spec = getSpectrum();
+      const result = makeFeatures(spec);
+      if (calibrating) {
+        recordHit(result.feature, result.peakHz, rms);
+      } else if (recordingMode) {
+        recordHit(result.feature, result.peakHz, rms);
+      }
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  async function startConversion() {
+    if (calibrating) {
+      setStatus("Дождись завершения калибровки.");
+      return;
+    }
+    const calibrated = NAMES.filter(name => !!profiles[name]);
+    if (!calibrated.length) {
+      setStatus("Пока нет откалиброванных инструментов. Открой 💾, выбери установку и откалибруй хотя бы один инструмент.");
+      return;
+    }
+    hitHistory = [];
+    $("hitCount").textContent = "0";
+    $("tempo").textContent = "—";
+    renderNotation();
+    recordingMode = true;
+    const ok = await startAudio();
+    if (!ok || !running) {
+      recordingMode = false;
+      return;
+    }
+    lastHitAt = 0;
+    lastRms = 0;
+    setStatus(`Слушаю в реальном времени. Распознаются только откалиброванные инструменты (${calibrated.length} из ${NAMES.length}); остальные звуки игнорируются. Нажми «Остановить запись», когда закончишь.`);
+  }
+
+  $("openPresetsBtn").addEventListener("click", openPresetPage);
+  $("closePresetsBtn").addEventListener("click", closePresetPage);
+  $("newPresetBtn").addEventListener("click", startNewPreset);
+  $("draftSaveBtn").addEventListener("click", saveDraftPreset);
+  $("backToPresetListBtn").addEventListener("click", returnToPresetList);
+  $("finishPresetEditingBtn").addEventListener("click", returnToPresetList);
+  $("loadPresetBtn").addEventListener("click", () => loadPreset($("presetSelect").value));
+  $("presetSelect").addEventListener("change", () => { if ($("presetSelect").value) $("presetNameInput").value = $("presetSelect").value; });
+  $("savePresetBtn").addEventListener("click", saveCurrentAsPreset);
+  $("renamePresetBtn").addEventListener("click", renameActivePreset);
+  $("deletePresetBtn").addEventListener("click", deleteActivePreset);
+
+  // Настройки размера такта и темпа.
+  let meterTop = 4;
+  let meterBottom = 4;
+  let quarterBpm = 60;
+  const meterDenominators = [1, 2, 4, 8, 16, 32];
+  function refreshRhythmSettings() {
+    $("meterTop").textContent = meterTop;
+    $("meterBottom").textContent = meterBottom;
+    $("bpmValue").textContent = quarterBpm;
+  }
+  $("meterTopPlus").addEventListener("click", () => { if (meterTop < 16) meterTop++; refreshRhythmSettings(); });
+  $("meterTopMinus").addEventListener("click", () => { if (meterTop > 1) meterTop--; refreshRhythmSettings(); });
+  $("meterBottomPlus").addEventListener("click", () => { const i = meterDenominators.indexOf(meterBottom); if (i < meterDenominators.length - 1) meterBottom = meterDenominators[i + 1]; refreshRhythmSettings(); });
+  $("meterBottomMinus").addEventListener("click", () => { const i = meterDenominators.indexOf(meterBottom); if (i > 0) meterBottom = meterDenominators[i - 1]; refreshRhythmSettings(); });
+  // BPM меняется сразу на 1 при нажатии; при удержании повторяется быстрее.
+  function changeBpm(delta) {
+    quarterBpm = Math.max(20, Math.min(300, quarterBpm + delta));
+    refreshRhythmSettings();
+  }
+  function makeHoldBpm(button, delta) {
+    let repeatDelay = null;
+    let repeatTimer = null;
+    let held = false;
+    const stop = () => {
+      held = false;
+      if (repeatDelay !== null) clearTimeout(repeatDelay);
+      if (repeatTimer !== null) clearInterval(repeatTimer);
+      repeatDelay = repeatTimer = null;
+    };
+    button.addEventListener("pointerdown", event => {
+      if (event.button !== undefined && event.button !== 0) return;
+      event.preventDefault();
+      stop();
+      held = true;
+      changeBpm(delta);
+      try { button.setPointerCapture(event.pointerId); } catch (_) {}
+      repeatDelay = setTimeout(() => {
+        if (!held) return;
+        repeatTimer = setInterval(() => changeBpm(delta), 65);
+      }, 350);
+    });
+    ["pointerup", "pointercancel", "lostpointercapture", "pointerleave"].forEach(name => button.addEventListener(name, stop));
+    // Поддержка клавиатуры и доступности без повторного срабатывания после касания.
+    button.addEventListener("click", event => {
+      if (event.detail === 0) changeBpm(delta);
+    });
+  }
+  makeHoldBpm($("bpmMinus"), -1);
+  makeHoldBpm($("bpmPlus"), 1);
+  refreshRhythmSettings();
+
+  $("startConvertBtn").addEventListener("click", startConversion);
+  $("stopConvertBtn").addEventListener("click", () => {
+    if (!recordingMode) return;
+    const total = hitHistory.length;
+    stopAudio();
+    setStatus(`Запись остановлена. В схеме ${total} ударов.`);
+    renderNotation();
+  });
+
+  renderPresets();
+  renderPresetCards();
+  updateProfileStatus();
+  renderProfiles();
+  renderNotation();
+})();
+</script>
+</body>
+</html>
