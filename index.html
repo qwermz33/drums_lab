@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DrumLab">
 <title>DrumLab — ритм с микрофона</title>
 <meta name="description" content="Мобильный экспериментальный прототип для калибровки звука барабанов и визуализации ритма.">
 <style>
@@ -45,9 +49,30 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     /* Скрываем вспомогательный статус и статистику под кнопками записи. */
     #conversionStatus,
     #conversionStatus + .stats { display: none !important; }
+
+/* Экран запуска и маятник метронома */
+#splash{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(circle at 50% 38%,#233653 0,#10182b 48%,#090d18 100%);transition:opacity .35s ease,visibility .35s ease}
+#splash.hide{opacity:0;visibility:hidden;pointer-events:none}
+.splash-logo{width:104px;height:104px;display:block;filter:drop-shadow(0 18px 24px #0008)}.splash-logo img{display:block;width:100%;height:100%}
+.splash-name{font-size:29px;font-weight:850;letter-spacing:.4px}.splash-caption{font-size:13px;color:var(--muted)}
+.splash-loader{width:116px;height:3px;border-radius:5px;background:#34415e;overflow:hidden;margin-top:10px}.splash-loader:after{content:"";display:block;width:42%;height:100%;background:var(--accent);border-radius:5px;animation:loadbar 1.1s ease-in-out infinite alternate}@keyframes loadbar{from{transform:translateX(-10%)}to{transform:translateX(150%)}}
+#countInStatus{display:none;text-align:center;margin:12px 0 4px;color:var(--accent);font-weight:750;font-size:15px;min-height:22px}
+#visualMetronome{margin:14px auto 6px;width:100%;max-width:300px;height:112px;display:flex;align-items:flex-end;justify-content:center;position:relative;overflow:hidden}
+.metro-base{position:absolute;bottom:4px;width:116px;height:14px;border-radius:50% 50% 9px 9px;background:linear-gradient(180deg,#344766,#1a2740);border:1px solid #52627e}
+.metro-pivot{position:absolute;bottom:15px;width:12px;height:12px;border-radius:50%;background:var(--accent);z-index:2;box-shadow:0 0 14px #70e1c188}
+.metro-arm{position:absolute;bottom:19px;left:calc(50% - 2px);width:4px;height:82px;border-radius:5px;background:linear-gradient(180deg,#d9fff4,#70e1c1 70%,#3b8e83);transform-origin:50% 100%;transform:rotate(0deg)}
+.metro-weight{position:absolute;top:4px;left:-7px;width:18px;height:22px;border-radius:6px;background:#f4d58a;border:2px solid #fff0c4;box-shadow:0 2px 9px #0007}
+#visualMetronome.running .metro-arm{animation:pendulum var(--beat-cycle,1s) ease-in-out infinite alternate}
+@keyframes pendulum{from{transform:rotate(-27deg)}to{transform:rotate(27deg)}}
+#metroBeatLabel{text-align:center;color:var(--muted);font-size:12px;margin-top:-2px}
+.placement-guide{background:#101a2b;border:1px solid #34415e;border-radius:13px;padding:12px;margin:10px 0 13px;color:var(--muted);font-size:13px;line-height:1.55}
+.placement-guide strong{color:var(--text)}
+.import-export{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}.import-export button{flex:1;min-width:135px;font-size:13px;min-height:42px;padding:9px}
+@media(prefers-reduced-motion:reduce){.splash-loader:after,#visualMetronome.running .metro-arm{animation:none}}
   </style>
 </head>
 <body>
+<div id="splash" aria-label="Загрузка DrumLab"><div class="splash-logo"><img src="icon.svg" alt="DrumLab"></div><div class="splash-name">DrumLab</div><div class="splash-caption">Слушай ритм. Записывай музыку.</div><div class="splash-loader"></div></div>
 <main>
   <header class="top">
     <div class="headerbar"><h1>🥁 DrumLab</h1><button class="disk-btn" id="openPresetsBtn" aria-label="Сохранённые установки" title="Сохранённые установки">💾</button></div>
@@ -90,6 +115,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     </div>
     <button class="primary" id="startConvertBtn">▶ Начать слушать и записывать ноты</button>
     <button class="secondary" id="stopConvertBtn" disabled>■ Остановить запись</button>
+    <div id="countInStatus" aria-live="polite"></div>
+    <div id="visualMetronome" aria-label="Визуальный метроном"><div class="metro-base"></div><div class="metro-arm"><div class="metro-weight"></div></div><div class="metro-pivot"></div></div>
+    <div id="metroBeatLabel">Маятник будет двигаться в такт во время записи — без звука</div>
     <div class="status" id="conversionStatus" role="status">Выбери установку и откалибруй те инструменты, которые хочешь распознавать.</div>
     <div class="stats" style="margin-top:10px">
       <div class="stat"><span class="small">Распознано ударов</span><b id="hitCount">0</b></div>
@@ -104,6 +132,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     <div class="preset-head"><button class="icon-btn" id="closePresetsBtn" aria-label="Назад">‹</button><h2>Мои установки</h2><button class="icon-btn" id="newPresetBtn" aria-label="Добавить установку" title="Новая установка">＋</button></div>
     <div id="presetListView">
       <div class="note">Нажми на установку, чтобы раскрыть её таблицу. Каждая установка хранит собственные настройки.</div>
+      <div class="import-export"><button id="importCalibrationBtn">📂 Загрузить калибровку</button><input id="importCalibrationFile" type="file" accept=".json,application/json" hidden></div>
+      <div class="note">Файл калибровки содержит звуковые профили инструментов, но не содержит аудиозаписи ударов. После импорта профили сразу доступны для распознавания.</div>
       <div id="presetCards"></div>
     </div>
     <div id="presetEditor" style="display:none">
@@ -115,6 +145,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       </section>
       <section class="panel" id="instrumentEditorPanel">
         <h2>Таблица инструментов</h2>
+        <div class="placement-guide"><strong>Куда положить телефон?</strong><br>• Поставь телефон устойчиво на расстоянии примерно 50–100 см от установки, микрофоном в сторону барабанов.<br>• Выбери место сбоку или немного впереди установки, где микрофон не закрыт тарелками, стойками и одеждой.<br>• Не клади телефон на сам барабан или рядом с динамиком. Не перемещай его между калибровкой и игрой.<br>• Перед калибровкой останови музыку и посторонние звуки. Играй 8 отдельных, примерно одинаковых ударов только по выбранному инструменту.<br><strong>Важно:</strong> если инструменты звучат одновременно или сильно перекрывают друг друга, микрофон телефона может путать их — попробуй немного изменить положение и повторить калибровку.</div>
         <div class="note" style="margin-bottom:10px">В каждой строке своя кнопка калибровки. Нажми «Начать анализ» напротив инструмента и сыграй 8 отдельных ударов. После калибровки можно прослушать запись звука и увидеть примерную доминирующую частоту.</div>
         <div class="status" id="profileStatus">В этой установке пока нет калибровок.</div>
         <div style="overflow-x:auto;margin-top:10px"><table class="instrument-table"><thead><tr><th>Барабан</th><th>Начать анализ барабана</th><th>Прослушать барабан</th><th>Доминирующая частота, Гц</th></tr></thead><tbody id="profilesBody"></tbody></table></div>
@@ -170,7 +201,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   } catch (_) { activePresetName = ""; }
   let calibratingName = null;
   let audioCtx = null, analyser = null, source = null, stream = null;
-  let raf = 0, running = false, calibrating = false, recordingMode = false;
+  let raf = 0, running = false, calibrating = false, recordingMode = false, isCountIn = false, countInToken = 0;
   let calibrationFrames = [], calibrationHits = 0, calibrationPeakHz = [], calibrationHitTimes = [], recorderStartedAt = 0, lastHitAt = 0, lastRms = 0;
   // Детектор одного физического удара: повторно взводится только после затухания звука.
   let hitLatched = false, belowReleaseSince = 0;
@@ -357,10 +388,43 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       const actions=document.createElement("div");actions.className="preset-actions";
       const use=document.createElement("button");use.textContent="✓ Выбрать эту установку";use.addEventListener("click",()=>{loadPreset(name);$("draftBar").classList.remove("show");closePresetPage();});
       const rename=document.createElement("button");rename.textContent="✏️ Имя";rename.addEventListener("click",()=>{const next=prompt("Новое название установки:",name);if(!next||!next.trim()||next.trim()===name)return;const clean=next.trim();if(presets[clean]){alert("Такое название уже существует.");return;}presets[clean]=presets[name];delete presets[name];if(activePresetName===name)activePresetName=clean;savePresetStorage();renderPresets();renderPresetCards();});
+      const exportBtn=document.createElement("button");exportBtn.textContent="⬇ Файл";exportBtn.title="Скачать файл калибровки";exportBtn.addEventListener("click",()=>exportPreset(name));
       const del=document.createElement("button");del.textContent="🗑";del.title="Удалить установку";del.className="danger";del.addEventListener("click",()=>{if(!confirm(`Удалить установку «${name}»?`))return;delete presets[name];if(activePresetName===name){activePresetName="";Object.keys(profiles).forEach(n=>delete profiles[n]);try{localStorage.setItem(STORAGE_KEY,"{}");}catch(_){}}savePresetStorage();renderPresets();renderProfiles();updateProfileStatus();renderPresetCards();});
-      actions.append(use,rename,del);details.appendChild(actions);
+      actions.append(use,rename,exportBtn,del);details.appendChild(actions);
       card.append(head,details);host.appendChild(card);
     });
+  }
+
+
+  function exportPreset(name) {
+    const preset = presets[name];
+    if (!preset) return;
+    const payload = {format:"DrumLab-calibration",version:1,name,exportedAt:new Date().toISOString(),profiles:serializeProfiles(preset.profiles)};
+    const blob = new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href=url; a.download=`DrumLab-${name.replace(/[^\p{L}\p{N}_-]+/gu,"_")}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  async function importPresetFile(file) {
+    try {
+      const data = JSON.parse(await file.text());
+      if (!data || data.format !== "DrumLab-calibration" || data.version !== 1 || !data.profiles || typeof data.profiles !== "object") throw new Error("Файл не похож на файл калибровки DrumLab.");
+      const imported = hydrateProfiles(data.profiles);
+      if (!Object.keys(imported).length) throw new Error("В файле нет корректных профилей инструментов.");
+      let name = String(data.name || "Импортированная установка").trim().slice(0,50) || "Импортированная установка";
+      if (presets[name]) {
+        let n=2; while(presets[`${name} (${n})`]) n++;
+        name = `${name} (${n})`;
+      }
+      presets[name] = {profiles:imported,updated:new Date().toISOString()};
+      activePresetName = name;
+      Object.keys(profiles).forEach(n=>delete profiles[n]);
+      Object.assign(profiles,hydrateProfiles(serializeProfiles(imported)));
+      try { localStorage.setItem(STORAGE_KEY,JSON.stringify(serializeProfiles(profiles))); } catch (_) {}
+      savePresetStorage(); renderPresets(); renderPresetCards(); renderProfiles(); updateProfileStatus();
+      $("presetStatus").textContent = `Импортирована установка «${name}»: ${Object.keys(imported).length} инструментов. Она уже выбрана.`;
+      alert(`Калибровка «${name}» загружена. Откалибровано инструментов: ${Object.keys(imported).length}.`);
+    } catch(err) { alert("Не удалось загрузить калибровку: " + err.message); }
   }
 
   function setStatus(text) { $("conversionStatus").textContent = text; }
@@ -426,6 +490,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     running = false;
     calibrating = false;
     recordingMode = false;
+    isCountIn = false;
+    countInToken++;
+    stopVisualMetronome();
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
     if (stream) stream.getTracks().forEach(t => t.stop());
@@ -814,9 +881,35 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     raf = requestAnimationFrame(loop);
   }
 
+  function beatDurationMs() { return 60000 / quarterBpm * (4 / meterBottom); }
+  function setVisualMetronome(active) {
+    const el = $("visualMetronome");
+    if (!el) return;
+    el.style.setProperty("--beat-cycle", `${Math.max(120, beatDurationMs())}ms`);
+    el.classList.toggle("running", !!active);
+  }
+  function stopVisualMetronome() {
+    $("visualMetronome")?.classList.remove("running");
+    $("countInStatus").style.display = "none";
+    $("metroBeatLabel").textContent = "Маятник будет двигаться в такт во время записи — без звука";
+  }
+  function playMetronomeClick(accent=false) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = accent ? 1320 : 880;
+    const now = audioCtx.currentTime;
+    gain.gain.setValueAtTime(accent ? 0.22 : 0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + 0.08);
+  }
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
   async function startConversion() {
-    if (calibrating) {
-      setStatus("Дождись завершения калибровки.");
+    if (calibrating || recordingMode || isCountIn) {
+      setStatus("Сначала закончи текущую калибровку или останови запись.");
       return;
     }
     const calibrated = NAMES.filter(name => !!profiles[name]);
@@ -824,23 +917,43 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       setStatus("Пока нет откалиброванных инструментов. Открой 💾, выбери установку и откалибруй хотя бы один инструмент.");
       return;
     }
+    const ok = await startAudio();
+    if (!ok || !running || !audioCtx) return;
     hitHistory = [];
     $("hitCount").textContent = "0";
     $("tempo").textContent = "—";
     renderNotation();
-    recordingMode = true;
-    const ok = await startAudio();
-    if (!ok || !running) {
-      recordingMode = false;
-      return;
+    const token = ++countInToken;
+    isCountIn = true;
+    recordingMode = false;
+    $("stopConvertBtn").disabled = false;
+    const beatMs = beatDurationMs();
+    const totalBeats = Math.max(1, meterTop * 2);
+    $("countInStatus").style.display = "block";
+    $("metroBeatLabel").textContent = `Отсчёт: ${meterTop}/${meterBottom} · ${quarterBpm} BPM`;
+    setVisualMetronome(true);
+    setStatus("Подготовка: два такта метронома. После отсчёта начнётся запись.");
+    for (let i=0; i<totalBeats; i++) {
+      if (token !== countInToken || !running) return;
+      const beatInBar = i % meterTop;
+      const accent = beatInBar === 0;
+      $("countInStatus").textContent = `${accent ? "РАЗ" : ["","два","три","четыре","пять","шесть","семь","восемь","девять","десять","одиннадцать","двенадцать","тринадцать","четырнадцать","пятнадцать","шестнадцать"][beatInBar] || (beatInBar+1)}  ·  такт ${Math.floor(i/meterTop)+1} из 2`;
+      playMetronomeClick(accent);
+      await wait(beatMs);
     }
-    lastHitAt = 0;
-    lastRms = 0;
-    hitLatched = false;
-    belowReleaseSince = 0;
-    setStatus(`Слушаю в реальном времени. Распознаются только откалиброванные инструменты (${calibrated.length} из ${NAMES.length}); остальные звуки игнорируются. Нажми «Остановить запись», когда закончишь.`);
+    if (token !== countInToken || !running) return;
+    isCountIn = false;
+    recordingMode = true;
+    sessionStart = performance.now();
+    lastHitAt = 0; lastRms = 0; hitLatched = false; belowReleaseSince = 0;
+    $("countInStatus").style.display = "none";
+    $("metroBeatLabel").textContent = `Идёт запись · ${quarterBpm} BPM · метроном без звука`;
+    setVisualMetronome(true);
+    setStatus(`Слушаю в реальном времени. Распознаются только откалиброванные инструменты (${calibrated.length} из ${NAMES.length}). Метроном движется без звука. Нажми «Остановить запись», когда закончишь.`);
   }
 
+  $("importCalibrationBtn").addEventListener("click", () => $("importCalibrationFile").click());
+  $("importCalibrationFile").addEventListener("change", async e => { const file=e.target.files && e.target.files[0]; if(file) await importPresetFile(file); e.target.value=""; });
   $("openPresetsBtn").addEventListener("click", openPresetPage);
   $("closePresetsBtn").addEventListener("click", closePresetPage);
   $("newPresetBtn").addEventListener("click", startNewPreset);
@@ -906,10 +1019,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 
   $("startConvertBtn").addEventListener("click", startConversion);
   $("stopConvertBtn").addEventListener("click", () => {
-    if (!recordingMode) return;
+    if (!recordingMode && !isCountIn) return;
+    const wasCountIn = isCountIn;
     const total = hitHistory.length;
     stopAudio();
-    setStatus(`Запись остановлена. В схеме ${total} ударов.`);
+    setStatus(wasCountIn ? "Отсчёт отменён." : `Запись остановлена. В схеме ${total} ударов.`);
     renderNotation();
   });
 
@@ -918,6 +1032,12 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   updateProfileStatus();
   renderProfiles();
   renderNotation();
+  window.addEventListener("load",()=>setTimeout(()=>$("splash").classList.add("hide"),650),{once:true});
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("./sw.js",{updateViaCache:"none"}).then(reg=>{ reg.update().catch(()=>{}); });
+    let reloading=false;
+    navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload();}});
+  }
 })();
 </script>
 </body>
