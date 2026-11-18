@@ -105,6 +105,8 @@ jobs:
         with:
           tag_name: drumlab-latest
           name: DrumLab — latest APK
-          body: "Скачайте DrumLab-Android.zip и распакуйте: внутри находится DrumLab.apk."
-          files: release/DrumLab-Android.zip
+          body: "Скачайте DrumLab.apk для прямой установки или DrumLab-Android.zip, если нужен архив."
+          files: |
+            release/DrumLab.apk
+            release/DrumLab-Android.zip
           make_latest: true
