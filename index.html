@@ -166,9 +166,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   const ACTIVE_PRESET_KEY = "drumlab_active_preset_v1";
   const presets = {};
   let activePresetName = "";
-  const SYMBOLS = {"Бас-барабан":"ББ","Малый барабан":"МБ","Том малый":"Тм","Том средний":"Тс","Том большой":"Тб","Хэт закрытый":"ХЗ","Хэт открытый":"ХО","Хэт ногой":"ХН","Райд":"Р","Крэш":"К"};
-  // Позиции для стандартного пятилинейного ударного стана: верхняя линия y=42, нижняя y=130.
-  const POSITIONS = {"Бас-барабан":141,"Малый барабан":86,"Том малый":64,"Том средний":75,"Том большой":108,"Хэт закрытый":42,"Хэт открытый":42,"Хэт ногой":152,"Райд":31,"Крэш":20};
+  const SYMBOLS = {"Бас-барабан":"Бочка","Малый барабан":"Малый","Том малый":"Том 1","Том средний":"Том 2","Том большой":"Floor Tom","Хэт закрытый":"HH закрытый","Хэт открытый":"HH открытый","Хэт ногой":"HH ногой","Райд":"Ride","Крэш":"Crash"};
+  // Позиции согласно схеме пользователя; пять основных линий y=42..130, короткие добавочные линии при необходимости.
+  const POSITIONS = {"Бас-барабан":130,"Малый барабан":86,"Том малый":64,"Том средний":42,"Том большой":108,"Хэт закрытый":20,"Хэт открытый":20,"Хэт ногой":152,"Райд":-2,"Крэш":20};
   function hydrateProfiles(raw) {
     const result = {};
     if (!raw || typeof raw !== "object") return result;
@@ -802,42 +802,33 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     const lastTime = shown.length ? shown[shown.length-1].time : 0;
     const span = Math.max(5, lastTime-firstTime);
     const xFor = h => 70 + ((h.time-firstTime)/span)*(width-115);
-    let markup = ``;
-    // Условный ключ ударных (две вертикальные планки) и размер такта перед нотами.
+    let markup = "";
     markup += `<path d="M 17 72 V 108 M 27 72 V 108" fill="none" stroke="#dce5fa" stroke-width="3" stroke-linecap="round"/>`;
     markup += `<text x="48" y="83" fill="#dce5fa" font-size="16" font-weight="650" text-anchor="middle">${meterTop}</text>`;
     markup += `<text x="48" y="103" fill="#dce5fa" font-size="16" font-weight="650" text-anchor="middle">${meterBottom}</text>`;
-    // Пять линий нотного стана; позиции нот соответствуют принятой схеме ударной установки.
-    for (let i=0;i<5;i++) {
-      const y=42+i*22;
-      markup += `<line x1="35" y1="${y}" x2="${width-20}" y2="${y}" stroke="#8793ad" stroke-width="1.2"/>`;
-    }
+    const staffTop=42, staffBottom=130, lineGap=22;
+    for (let i=0;i<5;i++) { const y=staffTop+i*lineGap; markup += `<line x1="35" y1="${y}" x2="${width-20}" y2="${y}" stroke="#8793ad" stroke-width="1.2"/>`; }
     shown.forEach((h, i) => {
-      // Не показываем неизвестные события и никогда не рисуем условные «??».
       if (!POSITIONS.hasOwnProperty(h.name) || !SYMBOLS[h.name]) return;
-      const x=xFor(h), y=POSITIONS[h.name];
-      const isCymbal=["Хэт закрытый","Хэт открытый","Хэт ногой","Райд","Крэш"].includes(h.name);
+      const x=xFor(h), y=POSITIONS[h.name], cymbals=["Хэт закрытый","Хэт открытый","Хэт ногой","Райд","Крэш"].includes(h.name);
       const isOpenHat=h.name === "Хэт открытый";
       const safeName=SYMBOLS[h.name].replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      if (y < staffTop || y > staffBottom) { const ledgerY=staffTop+Math.round((y-staffTop)/lineGap)*lineGap; markup += `<line x1="${x-12}" y1="${ledgerY}" x2="${x+12}" y2="${ledgerY}" stroke="#8793ad" stroke-width="1.2"/>`; }
       markup += `<line x1="${x+5}" y1="${y}" x2="${x+5}" y2="${y-25}" stroke="#70e1c1" stroke-width="1.8"/>`;
-      if (isCymbal) {
-        // В ударной нотации тарелки и хэты обозначаются крестиком, открытый хэт — с кружком.
+      if (cymbals) {
         markup += `<path d="M ${x-5} ${y-5} L ${x+5} ${y+5} M ${x+5} ${y-5} L ${x-5} ${y+5}" fill="none" stroke="#ffd479" stroke-width="2.2" stroke-linecap="round"/>`;
-        if (isOpenHat) markup += `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#ffd479" stroke-width="1.5"/>`;
-      } else {
-        markup += `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="#70e1c1" stroke="#70e1c1" transform="rotate(-18 ${x} ${y})"/>`;
-      }
-      markup += `<text x="${x}" y="${Math.min(169,y+15)}" fill="#dce5fa" font-size="9" text-anchor="middle">${safeName}</text>`;
+        if (isOpenHat || h.name==="Крэш") markup += `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#ffd479" stroke-width="1.5"/>`;
+        if (h.name==="Райд") markup += `<circle cx="${x}" cy="${y}" r="2.5" fill="#ffd479"/>`;
+      } else markup += `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="#70e1c1" stroke="#70e1c1" transform="rotate(-18 ${x} ${y})"/>`;
+      markup += `<text x="${x}" y="${Math.max(14,Math.min(169,y+15))}" fill="#dce5fa" font-size="9" text-anchor="middle">${safeName}</text>`;
       if (i===0 || Math.round(h.time*10)%10===0) markup += `<text x="${x}" y="183" fill="#aab6d0" font-size="10" text-anchor="middle">${h.time.toFixed(1)}с</text>`;
     });
     svg.setAttribute("viewBox", `0 0 ${width} 190`);
     svg.innerHTML=markup;
-    // Оценка темпа по типичному интервалу между последовательными ударами.
     const intervals=[];
     for(let i=1;i<hitHistory.length;i++){const d=hitHistory[i].time-hitHistory[i-1].time;if(d>=0.22&&d<=1.5) intervals.push(d);}
     if(intervals.length){intervals.sort((a,b)=>a-b);const med=intervals[Math.floor(intervals.length/2)];$("tempo").textContent=Math.round(60/med);}else $("tempo").textContent="—";
   }
-
   function loop() {
     if (!running) return;
     const rms = getWaveform();
