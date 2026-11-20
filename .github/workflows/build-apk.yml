@@ -31,6 +31,31 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
+      # Reuse one debug keystore across workflow runs so Android recognizes
+      # every subsequent APK as an update to the same installed app.
+      - name: Prepare stable Android signing key
+        shell: bash
+        run: mkdir -p "$HOME/.android"
+
+      - name: Restore stable Android signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: drumlab-android-debug-signing-v1
+
+      - name: Create signing key on first build
+        shell: bash
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+
       - name: Prepare Capacitor project from index.html
         shell: bash
         run: |
@@ -77,7 +102,24 @@ jobs:
           PY
           npx cap sync android
 
-      - name: Build debug APK
+          # Android requires a strictly increasing versionCode for in-place updates.
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          p = Path("android/app/build.gradle")
+          s = p.read_text()
+          code = int(os.environ["GITHUB_RUN_NUMBER"])
+          s, n = re.subn(r'versionCode\\s+\\d+', f'versionCode {code}', s, count=1)
+          if n != 1:
+              raise SystemExit("Could not set Android versionCode in app/build.gradle")
+          s, n = re.subn(r'versionName\\s+"[^"]+"', f'versionName "1.0.{code}"', s, count=1)
+          if n != 1:
+              raise SystemExit("Could not set Android versionName in app/build.gradle")
+          p.write_text(s)
+          print(f"DrumLab version: 1.0.{code} (versionCode {code})")
+          PY
+
+      - name: Build APK
         shell: bash
         run: |
           cd android
