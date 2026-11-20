@@ -157,7 +157,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const NAMES = ["Бас-барабан","Малый барабан","Том малый","Том средний","Том большой","Хэт закрытый","Хэт открытый","Хэт ногой","Райд","Крэш"];
+  const NAMES = ["Ride","Ride Bell","Hi-Hat закрытый","Hi-Hat открытый","Hi-Hat ногой","Бочка","Snare","Snare Rim Shot","Snare Cross Stick","Snare Ghost Note","Tom 1","Tom 2","Floor Tom","Cha-Cha Bell","Mambo Cowbell"];
   const FFT_SIZE = 8192;
   const MIN_GAP_MS = 150;
   const profiles = {};
@@ -166,9 +166,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   const ACTIVE_PRESET_KEY = "drumlab_active_preset_v1";
   const presets = {};
   let activePresetName = "";
-  const SYMBOLS = {"Бас-барабан":"Бочка","Малый барабан":"Малый","Том малый":"Том 1","Том средний":"Том 2","Том большой":"Floor Tom","Хэт закрытый":"HH закрытый","Хэт открытый":"HH открытый","Хэт ногой":"HH ногой","Райд":"Ride","Крэш":"Crash"};
+  const SYMBOLS = {"Ride":"Ride","Ride Bell":"Ride Bell","Hi-Hat закрытый":"HH закрытый","Hi-Hat открытый":"HH открытый","Hi-Hat ногой":"HH ногой","Бочка":"Бочка","Snare":"Snare","Snare Rim Shot":"Rim Shot","Snare Cross Stick":"Cross Stick","Snare Ghost Note":"Ghost Note","Tom 1":"Tom 1","Tom 2":"Tom 2","Floor Tom":"Floor Tom","Cha-Cha Bell":"Cha-Cha Bell","Mambo Cowbell":"Mambo Cowbell"};
   // Позиции согласно схеме пользователя; пять основных линий y=42..130, короткие добавочные линии при необходимости.
-  const POSITIONS = {"Бас-барабан":130,"Малый барабан":86,"Том малый":64,"Том средний":42,"Том большой":108,"Хэт закрытый":20,"Хэт открытый":20,"Хэт ногой":152,"Райд":-2,"Крэш":20};
+  const POSITIONS = {"Ride":-2,"Ride Bell":-24,"Hi-Hat закрытый":20,"Hi-Hat открытый":20,"Hi-Hat ногой":152,"Бочка":130,"Snare":86,"Snare Rim Shot":86,"Snare Cross Stick":86,"Snare Ghost Note":86,"Tom 1":64,"Tom 2":42,"Floor Tom":108,"Cha-Cha Bell":-24,"Mambo Cowbell":-24};
   function hydrateProfiles(raw) {
     const result = {};
     if (!raw || typeof raw !== "object") return result;
@@ -199,7 +199,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       localStorage.setItem(PRESETS_KEY, JSON.stringify(Object.fromEntries(Object.entries(presets).map(([n,v])=>[n,{profiles:serializeProfiles(v.profiles),updated:v.updated}]))));
     }
   } catch (_) { activePresetName = ""; }
-  let calibratingName = null;
+  let calibratingName = null, calibratingCategory = null, calibratingVariantLabel = null;
   let audioCtx = null, analyser = null, source = null, stream = null;
   let raf = 0, running = false, calibrating = false, recordingMode = false, isCountIn = false, countInToken = 0;
   let calibrationFrames = [], calibrationHits = 0, calibrationPeakHz = [], calibrationHitTimes = [], recorderStartedAt = 0, lastHitAt = 0, lastRms = 0;
@@ -550,7 +550,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     return dot / ((Math.sqrt(na*nb)) || 1);
   }
 
-  async function beginCalibration(name) {
+  async function beginCalibration(name, category = name, variantLabel = "Основной вариант") {
     if (recordingMode) {
       setStatus("Сначала останови запись ритма, затем калибруй инструменты.");
       return;
@@ -566,6 +566,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     calibrating = true;
     recordingMode = false;
     calibratingName = name;
+    calibratingCategory = category;
+    calibratingVariantLabel = variantLabel;
     calibrationFrames = [];
     calibrationPeakHz = [];
     calibrationHitTimes = [];
@@ -601,7 +603,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       return;
     }
     const ranked = Object.entries(profiles)
-      .map(([name,p]) => ({name, score: cosine(features,p.feature)}))
+      .map(([key,p]) => ({name:p.category || key, score: cosine(features,p.feature)}))
       .sort((a,b)=>b.score-a.score);
     // Сопоставляем только с откалиброванными профилями. Если сходство слишком слабое,
     // считаем звук фоном/неизвестным и не добавляем его в нотную запись.
@@ -621,10 +623,12 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     const avgPeakHz = calibrationPeakHz.length ? calibrationPeakHz.reduce((a,b)=>a+b,0)/calibrationPeakHz.length : 0;
     const finishedName = calibratingName;
     const audioKey = (activePresetName || "__current__") + "::" + finishedName;
-    profiles[finishedName] = {feature:avg, count, peakHz:avgPeakHz, updated:new Date().toISOString(), audioKey};
+    profiles[finishedName] = {feature:avg, count, peakHz:avgPeakHz, updated:new Date().toISOString(), audioKey, category:calibratingCategory || finishedName, variantLabel:calibratingVariantLabel || "Основной вариант"};
     saveProfiles();
     calibrating = false;
     calibratingName = null;
+    calibratingCategory = null;
+    calibratingVariantLabel = null;
     const recorder = calibrationRecorder;
     calibrationRecorder = null;
     const finalizeRecording = async () => {
@@ -744,29 +748,28 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   }
 
   function renderProfiles() {
-    const body = $("profilesBody");
-    body.innerHTML = "";
-    NAMES.forEach(name => {
-      const tr = document.createElement("tr");
-      const nameTd = document.createElement("td"); nameTd.textContent = name;
-      const analyzeTd = document.createElement("td");
-      const analyzeBtn = document.createElement("button");
-      analyzeBtn.textContent = calibrating && calibratingName === name ? `Калибровка ${calibrationHits}/8` : "🎙 Начать анализ";
-      analyzeBtn.disabled = calibrating;
-      analyzeBtn.addEventListener("click", () => beginCalibration(name));
-      analyzeTd.appendChild(analyzeBtn);
-
-      const playTd = document.createElement("td");
-      const playBtn = document.createElement("button");
-      playBtn.textContent = "▶ Прослушать";
-      playBtn.disabled = !profiles[name] || calibrating;
-      playBtn.addEventListener("click", () => { if (profiles[name]) playCalibrationRecording(name); });
-      playTd.appendChild(playBtn);
-
-      const freqTd = document.createElement("td");
-      freqTd.textContent = profiles[name] && profiles[name].peakHz ? `≈ ${Math.round(profiles[name].peakHz)} Гц` : "—";
-      tr.append(nameTd, analyzeTd, playTd, freqTd);
-      body.appendChild(tr);
+    const body=$("profilesBody"); body.innerHTML="";
+    NAMES.forEach(category=>{
+      const variants=Object.entries(profiles).filter(([key,p])=>(p.category||key)===category);
+      const head=document.createElement("tr"), cell=document.createElement("td"); cell.colSpan=4;
+      cell.style.cssText="padding:12px 8px;background:var(--panel2);font-weight:700";
+      cell.textContent=category+" — "+(variants.length?variants.length+" вариантов":"не откалибровано");
+      head.appendChild(cell); body.appendChild(head);
+      variants.forEach(([key,p],i)=>{
+        const tr=document.createElement("tr"), title=document.createElement("td");
+        title.textContent=p.variantLabel||(i===0?"Основной вариант":"Вариант "+(i+1));
+        const cal=document.createElement("td"), btn=document.createElement("button");
+        btn.textContent=calibrating&&calibratingName===key?"Запись "+calibrationHits+"/8":"🎙 Записать 8 ударов";
+        btn.disabled=calibrating; btn.addEventListener("click",()=>beginCalibration(key,category,title.textContent)); cal.appendChild(btn);
+        const play=document.createElement("td"), pb=document.createElement("button");
+        pb.textContent="▶ Прослушать"; pb.disabled=calibrating; pb.addEventListener("click",()=>playCalibrationRecording(key)); play.appendChild(pb);
+        const freq=document.createElement("td"); freq.textContent=p.peakHz?"≈ "+Math.round(p.peakHz)+" Гц":"—";
+        tr.append(title,cal,play,freq); body.appendChild(tr);
+      });
+      const addTr=document.createElement("tr"), addTd=document.createElement("td"); addTd.colSpan=4;
+      const add=document.createElement("button"); add.className="secondary"; add.textContent="+ Добавить вариант звучания"; add.disabled=calibrating;
+      add.addEventListener("click",()=>{const label=prompt("Название варианта для "+category+" (например, удар по краю):");if(!label||!label.trim())return;beginCalibration(category+"::"+Date.now(),category,label.trim().slice(0,50));});
+      addTd.appendChild(add); addTr.appendChild(addTd); body.appendChild(addTr);
     });
   }
 
@@ -903,7 +906,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       setStatus("Сначала закончи текущую калибровку или останови запись.");
       return;
     }
-    const calibrated = NAMES.filter(name => !!profiles[name]);
+    const calibrated = NAMES.filter(name => Object.entries(profiles).some(([key,p]) => (p.category || key) === name));
     if (!calibrated.length) {
       setStatus("Пока нет откалиброванных инструментов. Открой 💾, выбери установку и откалибруй хотя бы один инструмент.");
       return;
