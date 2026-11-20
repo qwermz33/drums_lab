@@ -219,10 +219,19 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   }
 
   function saveProfiles() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeProfiles(profiles))); } catch (_) {}
-    if (activePresetName && presets[activePresetName]) {
-      presets[activePresetName] = {profiles:hydrateProfiles(serializeProfiles(profiles)),updated:new Date().toISOString()};
-      savePresetStorage();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeProfiles(profiles)));
+      if (activePresetName && presets[activePresetName]) {
+        presets[activePresetName] = {profiles:hydrateProfiles(serializeProfiles(profiles)),updated:new Date().toISOString()};
+        savePresetStorage();
+      }
+      return true;
+    } catch (err) {
+      const message = "Не удалось сохранить калибровку: " + (err && err.message ? err.message : "ошибка хранилища");
+      const status = $("presetStatus");
+      if (status) status.textContent = message + ". Освободи место в памяти приложения и повтори сохранение.";
+      console.error(message, err);
+      return false;
     }
   }
 
@@ -632,6 +641,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     const recorder = calibrationRecorder;
     calibrationRecorder = null;
     const finalizeRecording = async () => {
+      let audioSaved = false;
       try {
         if (calibrationAudioChunks.length) {
           const fullBlob = new Blob(calibrationAudioChunks, {type: (recorder && recorder.mimeType) || 'audio/webm'});
@@ -640,7 +650,12 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
             if (representative) {
               profiles[finishedName].audioBlob = representative;
               saveProfiles();
-              try { await saveCalibrationAudio(audioKey, representative); } catch (_) { /* keep recording for this page session */ }
+              try {
+                await saveCalibrationAudio(audioKey, representative);
+                audioSaved = true;
+              } catch (err) {
+                console.error("Не удалось сохранить аудиозапись калибровки:", err);
+              }
             }
           }
         }
@@ -648,9 +663,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
         calibrationAudioChunks = [];
         renderProfiles();
         updateProfileStatus();
-        setStatus(profiles[finishedName].audioBlob
-          ? `Готово: «${finishedName}» откалиброван. Запись калибровки сохранена — её можно прослушать в таблице.`
-          : `Профиль «${finishedName}» откалиброван, но браузер не смог сохранить аудиозапись. Повтори калибровку в браузере с поддержкой записи аудио.`);
+        setStatus(audioSaved
+          ? `Готово: «${finishedName}» откалиброван. Калибровка и аудиозапись сохранены на устройстве.`
+          : `Профиль «${finishedName}» откалиброван, но аудиофайл не удалось сохранить. Проверь свободное место и повтори калибровку.`);
         stopAudio();
       }
     };
