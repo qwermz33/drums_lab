@@ -488,15 +488,24 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   }
 
   async function startAudio() {
-    if (running) return true;
+    if (running && audioCtx && analyser && stream) return true;
+    setStatus("Подключаю микрофон… Разреши доступ, если появится запрос.");
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("Этот браузер не поддерживает доступ к микрофону. Открой HTTPS-ссылку в современном браузере.");
-      stream = await navigator.mediaDevices.getUserMedia({
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Этот браузер не поддерживает доступ к микрофону. Открой HTTPS-ссылку в современном браузере.");
+      }
+      // Запрос микрофона запускается прямо из нажатия. AudioContext
+      // возобновляется параллельно, чтобы Android WebView не терял user activation.
+      const mediaPromise = navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: false },
         video: false
       });
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      await audioCtx.resume();
+      const resumePromise = audioCtx.resume();
+      stream = await mediaPromise;
+      await resumePromise;
+      if (audioCtx.state !== "running") await audioCtx.resume();
+
       source = audioCtx.createMediaStreamSource(stream);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = FFT_SIZE;
@@ -507,9 +516,17 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       $("startConvertBtn").disabled = true;
       $("stopConvertBtn").disabled = false;
       raf = requestAnimationFrame(loop);
+      setStatus("Микрофон подключён. Сыграй 8 отдельных ударов по выбранному инструменту.");
       return true;
     } catch (err) {
-      setStatus("Не удалось открыть микрофон: " + err.message + "\nОткрой страницу в браузере с HTTPS и разреши доступ к микрофону.");
+      running = false;
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (audioCtx) { try { await audioCtx.close(); } catch (_) {} }
+      stream = null; audioCtx = null; analyser = null; source = null;
+      $("startConvertBtn").disabled = false;
+      $("stopConvertBtn").disabled = true;
+      setStatus("Не удалось запустить анализ микрофона: " + (err && err.message ? err.message : err) + "\nПроверь разрешение микрофона для DrumLab и попробуй ещё раз.");
+      console.error("DrumLab audio startup failed:", err);
       return false;
     }
   }
