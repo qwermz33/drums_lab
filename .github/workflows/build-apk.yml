@@ -93,8 +93,8 @@ jobs:
           s = p.read_text()
           marker = '    <application'
           permissions = (
-              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\\n'
-              '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\\n\\n'
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
+              '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n\n'
           )
           if 'android.permission.RECORD_AUDIO' not in s:
               s = s.replace(marker, permissions + marker, 1)
@@ -109,10 +109,10 @@ jobs:
           p = Path("android/app/build.gradle")
           s = p.read_text()
           code = int(os.environ["GITHUB_RUN_NUMBER"])
-          s, n = re.subn(r'versionCode\\s+\\d+', f'versionCode {code}', s, count=1)
+          s, n = re.subn(r'versionCode\s+\d+', f'versionCode {code}', s, count=1)
           if n != 1:
               raise SystemExit("Could not set Android versionCode in app/build.gradle")
-          s, n = re.subn(r'versionName\\s+"[^"]+"', f'versionName "1.0.{code}"', s, count=1)
+          s, n = re.subn(r'versionName\s+"[^"]+"', f'versionName "1.0.{code}"', s, count=1)
           if n != 1:
               raise SystemExit("Could not set Android versionName in app/build.gradle")
           p.write_text(s)
