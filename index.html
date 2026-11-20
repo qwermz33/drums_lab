@@ -69,6 +69,25 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 .placement-guide strong{color:var(--text)}
 .import-export{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}.import-export button{flex:1;min-width:135px;font-size:13px;min-height:42px;padding:9px}
 @media(prefers-reduced-motion:reduce){.splash-loader:after,#visualMetronome.running .metro-arm{animation:none}}
+  
+/* Карточки анализа звука */
+.analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.analysis-card{min-width:0;padding:12px;border:1px solid var(--line);border-radius:15px;background:linear-gradient(155deg,#1a2740,#121b2d)}
+.analysis-card-head{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-bottom:10px}
+.analysis-card-title{font-size:15px;font-weight:750;line-height:1.25;overflow-wrap:anywhere}
+.analysis-state{font-size:10px;color:var(--muted);padding:4px 7px;border-radius:99px;background:#0d1728;border:1px solid var(--line);white-space:nowrap}
+.analysis-state.ready{color:var(--accent);border-color:#376b62}
+.analysis-sound{display:flex;align-items:center;gap:7px;padding:8px 0;border-top:1px solid #34415e}
+.analysis-sound-info{flex:1;min-width:0}
+.analysis-sound-name{font-size:13px;font-weight:650}
+.analysis-frequency{font-size:11px;color:var(--muted);margin-top:2px}
+.analysis-actions{display:flex;gap:5px;flex:0 0 auto}
+.analysis-actions button{min-height:34px;padding:6px 8px;font-size:11px;border-radius:9px}
+.analysis-calibrate{width:100%;min-height:39px;padding:8px 10px;font-size:12px;margin-top:7px}
+.analysis-add{width:100%;min-height:34px;padding:6px 8px;font-size:11px;margin-top:7px;border-style:dashed;background:transparent;color:var(--muted)}
+.analysis-empty{font-size:12px;color:var(--muted);line-height:1.4;padding:3px 0 7px}
+@media(max-width:370px){.analysis-grid{grid-template-columns:1fr}.analysis-card{padding:11px}}
+
   </style>
 </head>
 <body>
@@ -146,9 +165,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       <section class="panel" id="instrumentEditorPanel">
         <h2>Таблица инструментов</h2>
         <div class="placement-guide"><strong>Куда положить телефон?</strong><br>• Поставь телефон устойчиво на расстоянии примерно 50–100 см от установки, микрофоном в сторону барабанов.<br>• Выбери место сбоку или немного впереди установки, где микрофон не закрыт тарелками, стойками и одеждой.<br>• Не клади телефон на сам барабан или рядом с динамиком. Не перемещай его между калибровкой и игрой.<br>• Перед калибровкой останови музыку и посторонние звуки. Играй 8 отдельных, примерно одинаковых ударов только по выбранному инструменту.<br><strong>Важно:</strong> если инструменты звучат одновременно или сильно перекрывают друг друга, микрофон телефона может путать их — попробуй немного изменить положение и повторить калибровку.</div>
-        <div class="note" style="margin-bottom:10px">В каждой строке своя кнопка калибровки. Нажми «Начать анализ» напротив инструмента и сыграй 8 отдельных ударов. После калибровки можно прослушать запись звука и увидеть примерную доминирующую частоту.</div>
+        <div class="note" style="margin-bottom:10px">Выбери инструмент и сыграй 8 отдельных ударов. Для одного инструмента можно сохранить несколько вариантов звучания — все они будут распознаваться как одна нота на стане.</div>
         <div class="status" id="profileStatus">В этой установке пока нет калибровок.</div>
-        <div style="overflow-x:auto;margin-top:10px"><table class="instrument-table"><thead><tr><th>Барабан</th><th>Начать анализ барабана</th><th>Прослушать барабан</th><th>Доминирующая частота, Гц</th></tr></thead><tbody id="profilesBody"></tbody></table></div>
+        <div id="profilesBody" class="analysis-grid" aria-live="polite"></div>
       </section>
       <button class="secondary" id="finishPresetEditingBtn">Готово — к списку установок</button>
     </div>
@@ -763,28 +782,74 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
   }
 
   function renderProfiles() {
-    const body=$("profilesBody"); body.innerHTML="";
-    NAMES.forEach(category=>{
-      const variants=Object.entries(profiles).filter(([key,p])=>(p.category||key)===category);
-      const head=document.createElement("tr"), cell=document.createElement("td"); cell.colSpan=4;
-      cell.style.cssText="padding:12px 8px;background:var(--panel2);font-weight:700";
-      cell.textContent=category+" — "+(variants.length?variants.length+" вариантов":"не откалибровано");
-      head.appendChild(cell); body.appendChild(head);
-      variants.forEach(([key,p],i)=>{
-        const tr=document.createElement("tr"), title=document.createElement("td");
-        title.textContent=p.variantLabel||(i===0?"Основной вариант":"Вариант "+(i+1));
-        const cal=document.createElement("td"), btn=document.createElement("button");
-        btn.textContent=calibrating&&calibratingName===key?"Запись "+calibrationHits+"/8":"🎙 Записать 8 ударов";
-        btn.disabled=calibrating; btn.addEventListener("click",()=>beginCalibration(key,category,title.textContent)); cal.appendChild(btn);
-        const play=document.createElement("td"), pb=document.createElement("button");
-        pb.textContent="▶ Прослушать"; pb.disabled=calibrating; pb.addEventListener("click",()=>playCalibrationRecording(key)); play.appendChild(pb);
-        const freq=document.createElement("td"); freq.textContent=p.peakHz?"≈ "+Math.round(p.peakHz)+" Гц":"—";
-        tr.append(title,cal,play,freq); body.appendChild(tr);
+    const body = $("profilesBody");
+    body.innerHTML = "";
+    NAMES.forEach(category => {
+      const variants = Object.entries(profiles).filter(([key, p]) => (p.category || key) === category);
+      const card = document.createElement("section");
+      card.className = "analysis-card";
+
+      const head = document.createElement("div");
+      head.className = "analysis-card-head";
+      const title = document.createElement("div");
+      title.className = "analysis-card-title";
+      title.textContent = category;
+      const state = document.createElement("span");
+      state.className = "analysis-state" + (variants.length ? " ready" : "");
+      state.textContent = variants.length ? "Откалиброван" : "Не настроен";
+      head.append(title, state);
+      card.appendChild(head);
+
+      if (!variants.length) {
+        const empty = document.createElement("div");
+        empty.className = "analysis-empty";
+        empty.textContent = "Пока нет сохранённого звучания";
+        card.appendChild(empty);
+      }
+
+      variants.forEach(([key, profile], index) => {
+        const sound = document.createElement("div");
+        sound.className = "analysis-sound";
+        const info = document.createElement("div");
+        info.className = "analysis-sound-info";
+        const name = document.createElement("div");
+        name.className = "analysis-sound-name";
+        name.textContent = "Звук " + (index + 1);
+        const frequency = document.createElement("div");
+        frequency.className = "analysis-frequency";
+        frequency.textContent = profile.peakHz ? "≈ " + Math.round(profile.peakHz) + " Гц" : "Частота не определена";
+        info.append(name, frequency);
+
+        const actions = document.createElement("div");
+        actions.className = "analysis-actions";
+        const calibrate = document.createElement("button");
+        calibrate.textContent = calibrating && calibratingName === key ? calibrationHits + "/8" : "🎙";
+        calibrate.title = "Перезаписать этот вариант";
+        calibrate.setAttribute("aria-label", "Перезаписать " + category + ", звук " + (index + 1));
+        calibrate.disabled = calibrating;
+        calibrate.addEventListener("click", () => beginCalibration(key, category, "Звук " + (index + 1)));
+        const play = document.createElement("button");
+        play.textContent = "▶";
+        play.title = "Прослушать";
+        play.setAttribute("aria-label", "Прослушать " + category + ", звук " + (index + 1));
+        play.disabled = calibrating;
+        play.addEventListener("click", () => playCalibrationRecording(key));
+        actions.append(calibrate, play);
+        sound.append(info, actions);
+        card.appendChild(sound);
       });
-      const addTr=document.createElement("tr"), addTd=document.createElement("td"); addTd.colSpan=4;
-      const add=document.createElement("button"); add.className="secondary"; add.textContent="+ Добавить вариант звучания"; add.disabled=calibrating;
-      add.addEventListener("click",()=>{const label=prompt("Название варианта для "+category+" (например, удар по краю):");if(!label||!label.trim())return;beginCalibration(category+"::"+Date.now(),category,label.trim().slice(0,50));});
-      addTd.appendChild(add); addTr.appendChild(addTd); body.appendChild(addTr);
+
+      const add = document.createElement("button");
+      add.className = "analysis-add";
+      add.textContent = variants.length ? "+ Добавить звучание" : "🎙 Начать анализ";
+      add.disabled = calibrating;
+      add.addEventListener("click", () => {
+        const nextIndex = variants.length + 1;
+        const key = variants.length ? category + "::" + Date.now() : category;
+        beginCalibration(key, category, "Звук " + nextIndex);
+      });
+      card.appendChild(add);
+      body.appendChild(card);
     });
   }
 
