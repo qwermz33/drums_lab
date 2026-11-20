@@ -587,7 +587,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     renderProfiles();
     $("startConvertBtn").disabled = true;
     $("stopConvertBtn").disabled = true;
-    setStatus("Калибровка: сыграй 8 отдельных ударов по инструменту «" + name + "». Запись этих ударов будет доступна кнопкой «Прослушать».");
+    setStatus("Калибровка «" + category + "», вариант «" + variantLabel + "»: сыграй 8 отдельных ударов. Запись можно будет прослушать отдельно.");
   }
 
   function recordHit(features, peakHz, rms) {
@@ -597,7 +597,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
       calibrationPeakHz.push(peakHz);
       calibrationHitTimes.push({time: (now - recorderStartedAt) / 1000, peakHz, rms});
       calibrationHits++;
-      setStatus(`Калибровка «${calibratingName}»: принято ударов ${calibrationHits}/8. Продолжай играть отдельные удары.`);
+      setStatus(`Калибровка «${calibratingCategory || calibratingName}», вариант «${calibratingVariantLabel || "Основной вариант"}»: принято ${calibrationHits}/8.`);
       renderProfiles();
       if (calibrationHits >= 8) finishCalibration();
       return;
@@ -813,15 +813,15 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
     for (let i=0;i<5;i++) { const y=staffTop+i*lineGap; markup += `<line x1="35" y1="${y}" x2="${width-20}" y2="${y}" stroke="#8793ad" stroke-width="1.2"/>`; }
     shown.forEach((h, i) => {
       if (!POSITIONS.hasOwnProperty(h.name) || !SYMBOLS[h.name]) return;
-      const x=xFor(h), y=POSITIONS[h.name], cymbals=["Хэт закрытый","Хэт открытый","Хэт ногой","Райд","Крэш"].includes(h.name);
-      const isOpenHat=h.name === "Хэт открытый";
+      const x=xFor(h), y=POSITIONS[h.name], cymbals=["Ride","Ride Bell","Hi-Hat закрытый","Hi-Hat открытый","Hi-Hat ногой","Snare Rim Shot","Snare Cross Stick","Snare Ghost Note","Cha-Cha Bell","Mambo Cowbell"].includes(h.name);
+      const isOpenHat=h.name === "Hi-Hat открытый";
       const safeName=SYMBOLS[h.name].replace(/&/g,"&amp;").replace(/</g,"&lt;");
       if (y < staffTop || y > staffBottom) { const ledgerY=staffTop+Math.round((y-staffTop)/lineGap)*lineGap; markup += `<line x1="${x-12}" y1="${ledgerY}" x2="${x+12}" y2="${ledgerY}" stroke="#8793ad" stroke-width="1.2"/>`; }
       markup += `<line x1="${x+5}" y1="${y}" x2="${x+5}" y2="${y-25}" stroke="#70e1c1" stroke-width="1.8"/>`;
       if (cymbals) {
         markup += `<path d="M ${x-5} ${y-5} L ${x+5} ${y+5} M ${x+5} ${y-5} L ${x-5} ${y+5}" fill="none" stroke="#ffd479" stroke-width="2.2" stroke-linecap="round"/>`;
-        if (isOpenHat || h.name==="Крэш") markup += `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#ffd479" stroke-width="1.5"/>`;
-        if (h.name==="Райд") markup += `<circle cx="${x}" cy="${y}" r="2.5" fill="#ffd479"/>`;
+        if (isOpenHat) markup += `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#ffd479" stroke-width="1.5"/>`;
+        if (h.name==="Ride Bell") markup += `<circle cx="${x}" cy="${y}" r="2.5" fill="#ffd479"/>`;
       } else markup += `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="#70e1c1" stroke="#70e1c1" transform="rotate(-18 ${x} ${y})"/>`;
       markup += `<text x="${x}" y="${Math.max(14,Math.min(169,y+15))}" fill="#dce5fa" font-size="9" text-anchor="middle">${safeName}</text>`;
       if (i===0 || Math.round(h.time*10)%10===0) markup += `<text x="${x}" y="183" fill="#aab6d0" font-size="10" text-anchor="middle">${h.time.toFixed(1)}с</text>`;
